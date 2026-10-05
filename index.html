@@ -10,8 +10,8 @@
 <script>
 /* ===== CONFIGURAÇÃO (opcional) =====
    Preencha com a URL e a chave "anon public" do Supabase (Project Settings > API)
-   para que todos os usuários já abram conectados. Se ficar vazio, a conexão pode
-   ser informada pela aba "Conexão e backup", ou o programa funciona só no navegador. */
+   para conectar o programa ao banco. Se ficar vazio, o programa funciona só
+   neste navegador (modo local). */
 window.PLANEJAMENTO_CONFIG = {
   SUPABASE_URL: "",
   SUPABASE_ANON_KEY: ""
@@ -32,6 +32,7 @@ window.PLANEJAMENTO_CONFIG = {
   color-scheme:light;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);font-variant-numeric:tabular-nums}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2;font-weight:700}
@@ -144,8 +145,8 @@ textarea{min-height:140px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
 
 <script>
 /* ============================ utilidades ============================ */
-const LS_KEY="planejamento-financeiro-v2", LS_CON="planejamento-financeiro-conexao";
-const CFG=Object.assign({},window.PLANEJAMENTO_CONFIG||{},(()=>{try{return JSON.parse(localStorage.getItem(LS_CON))||{}}catch(e){return{}}})());
+const LS_KEY="planejamento-financeiro-v2";
+const CFG=window.PLANEJAMENTO_CONFIG||{};
 const ONLINE=!!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&window.supabase);
 const sb=ONLINE?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY):null;
 const MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -225,24 +226,32 @@ function chart({labels,bars=[],lines=[],h=240}){
 
 /* ============================ armazenamento (Supabase ou navegador) ============================ */
 const local={
-  db(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{empresas:[],planos:[]}}catch(e){return{empresas:[],planos:[]}}},
+  db(){let d;try{d=JSON.parse(localStorage.getItem(LS_KEY))}catch(e){}d=d||{};return{empresas:d.empresas||[],planos:d.planos||[],contas:d.contas||[],movs:d.movs||[]};},
   put(db){if(!lsSet(LS_KEY,JSON.stringify(db)))throw new Error("O navegador bloqueou o armazenamento local.");}
 };
 const store={
   async listEmpresas(){if(ONLINE){const{data,error}=await sb.from("empresas").select("*").order("nome");if(error)throw error;return data;}return local.db().empresas.sort((a,b)=>a.nome.localeCompare(b.nome));},
   async insertEmpresa(e){if(ONLINE){const{data,error}=await sb.from("empresas").insert(e).select().single();if(error)throw error;return data;}const db=local.db(),x={...e,id:uid(),criado_em:new Date().toISOString()};db.empresas.push(x);local.put(db);return x;},
   async updateEmpresa(id,patch){if(ONLINE){const{error}=await sb.from("empresas").update(patch).eq("id",id);if(error)throw error;return;}const db=local.db();Object.assign(db.empresas.find(e=>e.id===id),patch);local.put(db);},
-  async deleteEmpresa(id){if(ONLINE){const{error}=await sb.from("empresas").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.empresas=db.empresas.filter(e=>e.id!==id);db.planos=db.planos.filter(p=>p.empresa_id!==id);local.put(db);},
+  async deleteEmpresa(id){if(ONLINE){const{error}=await sb.from("empresas").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.empresas=db.empresas.filter(e=>e.id!==id);db.planos=db.planos.filter(p=>p.empresa_id!==id);db.contas=db.contas.filter(c=>c.empresa_id!==id);db.movs=db.movs.filter(m=>m.empresa_id!==id);local.put(db);},
   async listPlanos(eid){if(ONLINE){const{data,error}=await sb.from("planejamentos").select("id,nome,atualizado_em,atualizado_por").eq("empresa_id",eid).order("criado_em");if(error)throw error;return data;}return local.db().planos.filter(p=>p.empresa_id===eid).map(({dados,...p})=>p);},
   async getPlano(id){if(ONLINE){const{data,error}=await sb.from("planejamentos").select("*").eq("id",id).single();if(error)throw error;return data;}return local.db().planos.find(p=>p.id===id);},
   async insertPlano(eid,nome,dados){if(ONLINE){const{data,error}=await sb.from("planejamentos").insert({empresa_id:eid,nome,dados}).select("id,nome").single();if(error)throw error;return data;}const db=local.db(),p={id:uid(),empresa_id:eid,nome,dados,atualizado_em:new Date().toISOString()};db.planos.push(p);local.put(db);return p;},
   async updatePlano(id,patch){if(ONLINE){const{error}=await sb.from("planejamentos").update(patch).eq("id",id);if(error)throw error;return;}const db=local.db(),p=db.planos.find(p=>p.id===id);if(p){Object.assign(p,patch,{atualizado_em:new Date().toISOString()});local.put(db);}},
+  async listContas(eid){if(ONLINE){const{data,error}=await sb.from("contas_bancarias").select("*").eq("empresa_id",eid).order("criado_em");if(error)throw error;return data;}return local.db().contas.filter(c=>c.empresa_id===eid);},
+  async saveConta(id,c){if(ONLINE){if(id){const{error}=await sb.from("contas_bancarias").update(c).eq("id",id);if(error)throw error;return;}const{data,error}=await sb.from("contas_bancarias").insert({...c,empresa_id:S.empresaId}).select().single();if(error)throw error;return data;}
+    const db=local.db();if(id){Object.assign(db.contas.find(x=>x.id===id),c);local.put(db);return;}const x={...c,id:uid(),empresa_id:S.empresaId,criado_em:new Date().toISOString()};db.contas.push(x);local.put(db);return x;},
+  async deleteConta(id){if(ONLINE){const{error}=await sb.from("contas_bancarias").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.contas=db.contas.filter(c=>c.id!==id);db.movs=db.movs.filter(m=>m.conta_id!==id&&m.conta_destino_id!==id);local.put(db);},
+  async listMovs(eid){if(ONLINE){let all=[],from=0;for(;;){const{data,error}=await sb.from("movimentos_bancarios").select("*").eq("empresa_id",eid).order("data").range(from,from+999);if(error)throw error;all=all.concat(data);if(data.length<1000)break;from+=1000;}return all;}return local.db().movs.filter(m=>m.empresa_id===eid);},
+  async saveMov(id,m){if(ONLINE){if(id){const{error}=await sb.from("movimentos_bancarios").update(m).eq("id",id);if(error)throw error;return;}const{data,error}=await sb.from("movimentos_bancarios").insert({...m,empresa_id:S.empresaId}).select().single();if(error)throw error;return data;}
+    const db=local.db();if(id){Object.assign(db.movs.find(x=>x.id===id),m);local.put(db);return;}const x={...m,id:uid(),empresa_id:S.empresaId,criado_em:new Date().toISOString()};db.movs.push(x);local.put(db);return x;},
+  async deleteMov(id){if(ONLINE){const{error}=await sb.from("movimentos_bancarios").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.movs=db.movs.filter(m=>m.id!==id);local.put(db);},
   async deletePlano(id){if(ONLINE){const{error}=await sb.from("planejamentos").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.planos=db.planos.filter(p=>p.id!==id);local.put(db);}
 };
 
 /* ============================ estado ============================ */
 const S={user:null,carregando:true,erro:"",empresas:[],empresaId:null,planos:[],atualId:null,dados:null,nome:"",info:"",aba:"visao",tela:"app",
-  saveState:"ok",saveMsg:"",confirmDel:"",export:"",showSql:false,simDiv:0,extra:10000};
+  saveState:"ok",saveMsg:"",confirmDel:"",contas:[],movs:[],bf:{conta:"",mes:"",busca:""},contaEdit:null,movEdit:null,confirmReal:false,simDiv:0,extra:10000};
 let saveTimer=null;
 const empresaAtual=()=>S.empresas.find(e=>e.id===S.empresaId);
 
@@ -259,6 +268,8 @@ async function iniciar(){
 async function abrirEmpresa(id){
   S.empresaId=id;lsSet(LS_KEY+"-empresa",id);S.tela="app";
   S.planos=await store.listPlanos(id);
+  S.contaEdit=null;S.movEdit=null;S.bf={conta:"",mes:"",busca:""};
+  [S.contas,S.movs]=await Promise.all([store.listContas(id),store.listMovs(id)]);
   if(!S.planos.length){S.planos=[await store.insertPlano(id,"Cenário base",vazio())];}
   const pref=lsGet(LS_KEY+"-plano-"+id);
   await abrirPlano(S.planos.find(p=>p.id===pref)?.id||S.planos[0].id);
@@ -281,13 +292,13 @@ function atualizarSave(){const el=document.getElementById("save");if(!el)return;
 function avisar(msg){S.saveState="err";S.saveMsg=msg;atualizarSave();}
 
 /* ============================ telas ============================ */
-const ABAS=[["visao","Visão geral"],["orcamento","Orçamento"],["fluxo","Fluxo de caixa"],["metas","Metas e investimentos"],["dividas","Dívidas"],["empresa","Empresa e cenários"],["conexao","Conexão e backup"]];
+const ABAS=[["visao","Visão geral"],["orcamento","Orçamento"],["fluxo","Fluxo de caixa"],["bancos","Contas bancárias"],["metas","Metas e investimentos"],["dividas","Dívidas"],["empresa","Empresa e cenários"]];
 const LOGO=`<span class="mark"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="3.5" height="7" rx="1" fill="var(--s-in)"/><rect x="8.25" y="7" width="3.5" height="11" rx="1" fill="var(--accent)"/><rect x="14.5" y="3" width="3.5" height="15" rx="1" fill="var(--s-out)"/></svg></span>`;
 
 function render(){
   const app=document.getElementById("app");
   if(ONLINE&&!S.user){app.innerHTML=telaLogin();return;}
-  if(S.erro){app.innerHTML=`<div class="center"><div class="card"><h2>Não foi possível carregar</h2><p class="neg">${esc(S.erro)}</p><p class="muted">Confira se o script SQL foi executado no Supabase e se a URL e a chave estão corretas.</p><div class="row"><button class="btn primary" data-act="recarregar">Tentar de novo</button><button class="btn" data-act="desconectar">Usar sem Supabase</button></div></div></div>`;return;}
+  if(S.erro){app.innerHTML=`<div class="center"><div class="card"><h2>Não foi possível carregar</h2><p class="neg">${esc(S.erro)}</p><p class="muted">Confira se o script SQL foi executado no Supabase e se a URL e a chave estão corretas.</p><div class="row"><button class="btn primary" data-act="recarregar">Tentar de novo</button></div></div></div>`;return;}
   if(S.carregando){app.innerHTML=`<div class="center"><div class="muted">Carregando…</div></div>`;return;}
   if(S.tela==="novaEmpresa"){app.innerHTML=telaNovaEmpresa();return;}
   const y=window.scrollY,emp=empresaAtual();
@@ -301,7 +312,7 @@ function render(){
     ${ONLINE?`<button class="btn small" data-act="sair" title="${esc(S.user?.email)}">Sair</button>`:""}
   </div></header>
   <nav class="tabs"><div class="wrap" role="tablist">${ABAS.map(([k,t])=>`<button role="tab" aria-selected="${S.aba===k}" data-act="aba" data-aba="${k}">${t}</button>`).join("")}</div></nav>
-  <main class="wrap">${({visao,orcamento,fluxo:telaFluxo,metas,dividas,empresa:telaEmpresa,conexao:telaConexao})[S.aba]()}</main>`;
+  <main class="wrap">${({visao,orcamento,fluxo:telaFluxo,metas,dividas,empresa:telaEmpresa,bancos:telaBancos})[S.aba]()}</main>`;
   atualizarSave();window.scrollTo(0,y);
 }
 
@@ -325,7 +336,7 @@ function telaNovaEmpresa(){
     <label class="check"><input type="checkbox" id="neBasico" checked> <span>Criar com categorias básicas de receitas e despesas (valores zerados, você edita depois)</span></label>
     <div class="err" id="neErr"></div>
     <div class="row"><button class="btn primary" type="submit">Cadastrar e começar</button>${primeira?"":`<button class="btn" type="button" data-act="cancelarEmpresa">Cancelar</button>`}</div>
-    ${!ONLINE?`<p class="note" style="margin:0">Modo local: os dados ficam só neste navegador. Para usar com a equipe, conecte ao Supabase na aba “Conexão e backup”.</p>`:""}
+    ${!ONLINE?`<p class="note" style="margin:0">Modo local: os dados ficam só neste navegador.</p>`:""}
   </form></div>`;
 }
 function telaLogin(){
@@ -335,7 +346,6 @@ function telaLogin(){
     <div class="field"><label for="lSenha">Senha</label><input id="lSenha" type="password" required autocomplete="current-password"></div>
     <div class="err" id="lErr"></div>
     <button class="btn primary" type="submit">Entrar</button>
-    <button class="btn" type="button" data-act="desconectar">Usar sem Supabase (modo local)</button>
   </form></div>`;
 }
 const kpi=(lbl,val,sub="",cls="")=>`<div class="kpi"><div class="lbl">${lbl}</div><div class="val ${cls}">${val}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`;
@@ -362,6 +372,7 @@ function visao(){
     ${kpi("Ponto de equilíbrio",isFinite(r.pe)?R(r.pe):"–",`Margem de contribuição ${pct(r.mc)}`)}
     ${kpi("Margem de segurança",temDados&&isFinite(r.pe)?pct(r.seguranca):"–","Receita acima do equilíbrio",r.seguranca<0?"neg":"")}
     ${kpi("Saldo em 12 meses",R(f[11].saldo),`em ${rotMes(f[11].ym)}`,f[11].saldo<0?"neg":"")}
+    ${S.contas.length?kpi("Saldo em contas bancárias",R(saldoAte("","")),`${S.contas.length} conta${S.contas.length>1?"s":""} · hoje`,saldoAte("","")<0?"neg":""):""}
     ${kpi("Menor saldo projetado",R(menor.saldo),`em ${rotMes(menor.ym)}`,menor.saldo<0?"neg":"")}
   </div>
   <div class="grid g2">
@@ -414,6 +425,7 @@ function telaFluxo(){
   <div class="section-head"><div><h2>Fluxo de caixa · 12 meses</h2><p>Projeção a partir do orçamento previsto, com crescimento por categoria, sazonalidade, parcelas das dívidas e aportes das metas.</p></div>
     <div class="row">
       <div class="field"><label for="saldoIni">Saldo inicial em caixa</label><input id="saldoIni" type="number" step="1000" data-num data-bind="saldoInicial" value="${num(d.saldoInicial)}"></div>
+      ${S.contas.length?`<button class="btn" data-act="usarSaldoContas" title="Saldo de todas as contas no início de ${rotMes(d.mesRef)}">Usar saldo das contas (${R(saldoAte("",d.mesRef+"-01"))})</button>`:""}
       <div class="field"><label for="incMetas">Aportes das metas</label><select id="incMetas" data-bind="incluirMetas" data-bool><option value="1" ${d.incluirMetas?"selected":""}>Incluir no fluxo</option><option value="0" ${!d.incluirMetas?"selected":""}>Não incluir</option></select></div>
     </div></div>
   <div class="grid g2">
@@ -509,24 +521,121 @@ function telaEmpresa(){
   <div class="panel"><h3>Empresas cadastradas (${S.empresas.length})</h3><div class="empresa-list">${S.empresas.map(x=>`<div class="empresa-item ${x.id===S.empresaId?"on":""}"><div><b>${esc(x.nome)}</b><div class="muted" style="font-size:.86rem">${[x.cnpj,x.setor,x.regime,x.cidade].filter(Boolean).map(esc).join(" · ")||"Sem dados complementares"}</div></div>${x.id===S.empresaId?`<span class="chip info">Selecionada</span>`:`<button class="btn small" data-act="irEmpresa" data-id="${x.id}">Abrir</button>`}</div>`).join("")}</div></div>`;
 }
 
-function telaConexao(){
+/* ============================ contas bancárias ============================ */
+const TIPOS_CONTA=["Conta corrente","Conta poupança","Conta pagamento","Investimento","Caixa (dinheiro)","Outro"];
+const hojeISO=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+const dataBR=iso=>iso?iso.split("-").reverse().join("/"):"";
+const contaNome=id=>S.contas.find(c=>c.id===id)?.nome||"—";
+// efeito de um lançamento no saldo de uma conta (ou de todas, quando contaId é vazio)
+function efeito(m,contaId){
+  const v=num(m.valor);
+  if(m.tipo==="entrada") return (!contaId||m.conta_id===contaId)?v:0;
+  if(m.tipo==="saida") return (!contaId||m.conta_id===contaId)?-v:0;
+  if(!contaId) return 0;
+  return (m.conta_id===contaId?-v:0)+(m.conta_destino_id===contaId?v:0);
+}
+function saldoAte(contaId,limite){ // limite: data ISO exclusiva; vazio = tudo
+  const contas=contaId?S.contas.filter(c=>c.id===contaId):S.contas;
+  let s=contas.reduce((t,c)=>t+num(c.saldo_inicial),0);
+  for(const m of S.movs) if(!limite||m.data<limite) s+=efeito(m,contaId);
+  return s;
+}
+const ordenaMovs=a=>a.sort((x,y)=>x.data<y.data?-1:x.data>y.data?1:String(x.criado_em||"").localeCompare(String(y.criado_em||"")));
+
+function formConta(c){
+  const e=c==="nova"?{}:S.contas.find(x=>x.id===c)||{};
+  return `<div class="panel"><h3>${c==="nova"?"Nova conta":"Editar conta"}</h3>
+    <div class="formgrid">
+      <div class="field" style="grid-column:1/-1"><label for="ctNome">Nome da conta *</label><input id="ctNome" value="${esc(e.nome)}" placeholder="Ex.: Itaú movimento"></div>
+      <div class="field"><label for="ctBanco">Banco</label><input id="ctBanco" value="${esc(e.banco)}"></div>
+      <div class="field"><label for="ctAg">Agência</label><input id="ctAg" value="${esc(e.agencia)}"></div>
+      <div class="field"><label for="ctNum">Conta</label><input id="ctNum" value="${esc(e.numero)}"></div>
+      <div class="field"><label for="ctTipo">Tipo</label><select id="ctTipo">${TIPOS_CONTA.map(t=>`<option ${t===(e.tipo||"Conta corrente")?"selected":""}>${t}</option>`).join("")}</select></div>
+      <div class="field"><label for="ctSaldo">Saldo inicial</label><input id="ctSaldo" type="number" step="0.01" value="${num(e.saldo_inicial)}"></div>
+      <div class="field"><label for="ctData">Data do saldo inicial</label><input id="ctData" type="date" value="${esc(e.data_saldo||"")}"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" data-act="salvarConta">Salvar conta</button>
+      ${S.contas.length?`<button class="btn" data-act="cancelarConta">Cancelar</button>`:""}
+      ${c!=="nova"?(S.confirmDel==="conta"?`<span class="neg" style="font-size:.9rem">Excluir a conta e todos os lançamentos dela?</span><button class="btn danger" data-act="excluirContaOk">Sim, excluir</button>`:`<button class="btn danger" data-act="excluirConta">Excluir conta</button>`):""}
+    </div></div>`;
+}
+
+function telaBancos(){
+  const d=S.dados,mes=S.bf.mes||d.mesRef,cs=S.bf.conta,ini=mes+"-01",fim=addMes(mes,1)+"-01";
+  if(!S.contas.length||S.contaEdit) return `
+    <div class="section-head"><div><h2>Contas bancárias</h2><p>Cadastre as contas da empresa e lance entradas, saídas e transferências para acompanhar o saldo real de cada conta.</p></div></div>
+    ${!S.contas.length?`<div class="empty" style="margin-bottom:14px">Nenhuma conta cadastrada. Cadastre a primeira conta abaixo.</div>`:""}
+    ${formConta(S.contaEdit||"nova")}`;
+  const saldoTotal=saldoAte("",""),saldoAntes=saldoAte(cs,ini);
+  const busca=S.bf.busca.trim().toLowerCase();
+  const lista=ordenaMovs(S.movs.filter(m=>m.data>=ini&&m.data<fim&&(!cs||m.conta_id===cs||m.conta_destino_id===cs)&&(!busca||`${m.descricao} ${m.categoria}`.toLowerCase().includes(busca))));
+  let run=saldoAntes,ent=0,sai=0;
+  const linhas=lista.map(m=>{const ef=efeito(m,cs);run+=busca?0:ef;if(ef>0)ent+=ef;if(ef<0)sai-=ef;
+    const tr=m.tipo==="transferencia";
+    return `<tr>
+      <td>${dataBR(m.data)}</td>
+      <td>${tr?`${esc(contaNome(m.conta_id))} → ${esc(contaNome(m.conta_destino_id))}`:esc(contaNome(m.conta_id))}</td>
+      <td style="white-space:normal;min-width:180px">${esc(m.descricao)||'<span class="muted">—</span>'}</td>
+      <td>${tr?'<span class="chip info">Transferência</span>':m.categoria?esc(m.categoria):'<span class="muted">Sem categoria</span>'}</td>
+      <td class="n pos">${ef>0?brl2.format(ef):tr&&!cs?`<span class="muted">${brl2.format(num(m.valor))}</span>`:""}</td>
+      <td class="n neg">${ef<0?brl2.format(-ef):""}</td>
+      <td class="n">${busca?"":`<b class="${run<0?"neg":""}">${brl2.format(run)}</b>`}</td>
+      <td style="white-space:nowrap"><button class="icon-btn" style="color:var(--accent)" data-act="editarMov" data-id="${m.id}" aria-label="Editar lançamento">✎</button><button class="icon-btn" data-act="delMov" data-id="${m.id}" aria-label="Excluir lançamento">✕</button></td></tr>`;}).join("");
+  // últimos 6 meses (entradas e saídas, sem transferências quando são todas as contas)
+  const meses=[...Array(6)].map((_,i)=>addMes(mes,i-5));
+  const serie=meses.map(ym=>{let e=0,s=0;for(const m of S.movs)if(m.data.slice(0,7)===ym){const ef=efeito(m,cs);if(ef>0)e+=ef;else s-=ef;}return{e,s};});
+  const ed=S.movEdit?S.movs.find(m=>m.id===S.movEdit):null, mv=ed||{data:hojeISO(),tipo:"entrada",conta_id:cs||S.contas[0].id};
+  const cats=[...new Set([...d.categorias.map(c=>c.nome),...S.movs.map(m=>m.categoria).filter(Boolean)])];
+  const r=resumo(d), mesRefMovs=S.movs.filter(m=>m.data.slice(0,7)===d.mesRef&&m.tipo!=="transferencia"&&m.categoria);
   return `
-  <div class="section-head"><div><h2>Conexão e backup</h2><p>${ONLINE?"Conectado ao Supabase: empresas e cenários são compartilhados com todos os usuários logados.":"<b>Modo local:</b> os dados ficam só neste navegador. Conecte ao Supabase para usar em vários computadores e com a equipe."}</p></div></div>
+  <div class="section-head"><div><h2>Contas bancárias</h2><p>Saldo real de cada conta, extrato do mês e lançamentos de entradas, saídas e transferências.</p></div>
+    <button class="btn" data-act="novaConta">+ Nova conta</button></div>
+  <div class="kpis">
+    ${kpi("Saldo total em contas",R(saldoTotal),`${S.contas.length} conta${S.contas.length>1?"s":""}`,saldoTotal<0?"neg":"")}
+    ${kpi(`Entradas · ${rotMes(mes)}`,R(ent),cs?esc(contaNome(cs)):"todas as contas")}
+    ${kpi(`Saídas · ${rotMes(mes)}`,R(sai),cs?esc(contaNome(cs)):"todas as contas")}
+    ${kpi(`Resultado · ${rotMes(mes)}`,R(ent-sai),"entradas − saídas",ent-sai<0?"neg":"")}
+  </div>
   <div class="grid g2">
-    <div class="panel"><h3>Conexão com o Supabase</h3>
-      <p class="note" style="margin-top:0">1. No Supabase, abra o <b>SQL Editor</b> e rode o script (botão abaixo).<br>2. Em <b>Project Settings → API</b>, copie a URL e a chave <i>anon public</i> e cole aqui.<br>3. Em <b>Authentication → Users</b>, crie os usuários que vão acessar.</p>
-      <div class="formgrid" style="margin-bottom:10px">
-        <div class="field"><label for="cUrl">Project URL</label><input id="cUrl" placeholder="https://xxxx.supabase.co" value="${esc(CFG.SUPABASE_URL||"")}"></div>
-        <div class="field"><label for="cKey">Chave anon public</label><input id="cKey" placeholder="eyJ…" value="${esc(CFG.SUPABASE_ANON_KEY||"")}"></div>
-      </div>
-      <div class="row"><button class="btn primary" data-act="conectar">Salvar e conectar</button>${ONLINE?`<button class="btn" data-act="desconectar">Voltar ao modo local</button>`:""}<button class="btn" data-act="sql">${S.showSql?"Ocultar script SQL":"Ver script SQL"}</button></div>
-      ${S.showSql?`<textarea id="sqlTxt" readonly style="margin-top:10px">${esc(SQL_SCHEMA)}</textarea><div class="row"><button class="btn small" data-act="copiarSql">Copiar script</button><span class="muted" id="sqlMsg"></span></div>`:""}
-      <p class="note" style="margin-bottom:0">A chave anon pode ficar no navegador: o acesso é protegido pelo login e pelas regras de segurança (RLS) do script. Os dados do modo local não são enviados automaticamente; exporte e importe pelo backup.</p></div>
-    <div class="panel"><h3>Backup do cenário</h3>
-      <div class="row" style="margin-bottom:10px"><button class="btn" data-act="exportar">Exportar JSON</button><label class="btn" for="imp">Importar JSON</label><input id="imp" type="file" accept=".json,application/json" hidden></div>
-      ${S.export?`<textarea id="expTxt" readonly>${esc(S.export)}</textarea><div class="row"><button class="btn small" data-act="copiar">Copiar</button><span class="muted" id="copyMsg"></span></div>`:`<p class="muted" style="margin:0">Exporta o cenário atual em JSON. Importar cria um novo cenário na empresa selecionada.</p>`}</div>
+    <div class="panel"><h3>Contas</h3><div class="empresa-list">${S.contas.map(c=>{const sd=saldoAte(c.id,"");return`<div class="empresa-item ${c.id===cs?"on":""}">
+      <div style="min-width:0"><b>${esc(c.nome)}</b><div class="muted" style="font-size:.84rem">${[c.banco,c.agencia&&"ag. "+c.agencia,c.numero&&"c/c "+c.numero,c.tipo].filter(Boolean).map(esc).join(" · ")}</div></div>
+      <div class="row" style="align-items:center"><b class="${sd<0?"neg":""}">${brl2.format(sd)}</b>
+        <button class="btn small" data-act="filtraConta" data-id="${c.id===cs?"":c.id}">${c.id===cs?"Ver todas":"Extrato"}</button>
+        <button class="icon-btn" style="color:var(--accent)" data-act="editarConta" data-id="${c.id}" aria-label="Editar conta">✎</button></div></div>`;}).join("")}</div></div>
+    <div class="panel"><h3>Entradas × saídas · últimos 6 meses</h3>${chart({labels:meses.map(rotMes),bars:[{name:"Entradas",color:"var(--s-in)",values:serie.map(x=>x.e)},{name:"Saídas",color:"var(--s-out)",values:serie.map(x=>x.s)}],h:220})}</div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="panel" id="formMov"><h3>${ed?"Editar lançamento":"Novo lançamento"}</h3>
+    <div class="formgrid">
+      <div class="field"><label for="mvData">Data</label><input id="mvData" type="date" value="${mv.data}"></div>
+      <div class="field"><label for="mvTipo">Tipo</label><select id="mvTipo">${[["entrada","Entrada"],["saida","Saída"],["transferencia","Transferência entre contas"]].map(([k,t])=>`<option value="${k}" ${k===mv.tipo?"selected":""}>${t}</option>`).join("")}</select></div>
+      <div class="field"><label for="mvConta" id="mvContaLbl">${mv.tipo==="transferencia"?"Conta de origem":"Conta"}</label><select id="mvConta">${S.contas.map(c=>`<option value="${c.id}" ${c.id===mv.conta_id?"selected":""}>${esc(c.nome)}</option>`).join("")}</select></div>
+      <div class="field" id="mvDestWrap" ${mv.tipo==="transferencia"?"":"hidden"}><label for="mvDest">Conta de destino</label><select id="mvDest">${S.contas.map(c=>`<option value="${c.id}" ${c.id===mv.conta_destino_id?"selected":""}>${esc(c.nome)}</option>`).join("")}</select></div>
+      <div class="field" style="grid-column:span 2"><label for="mvDesc">Descrição</label><input id="mvDesc" value="${esc(mv.descricao)}" placeholder="Ex.: Pagamento fornecedor X, NF 123"></div>
+      <div class="field" id="mvCatWrap" ${mv.tipo==="transferencia"?"hidden":""}><label for="mvCat">Categoria do orçamento</label><input id="mvCat" list="listaCats" value="${esc(mv.categoria)}" placeholder="Escolha ou digite"><datalist id="listaCats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
+      <div class="field"><label for="mvValor">Valor (R$)</label><input id="mvValor" type="number" step="0.01" min="0" value="${ed?num(ed.valor):""}" placeholder="0,00"></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="salvarMov">${ed?"Salvar alteração":"Lançar"}</button>${ed?`<button class="btn" data-act="cancelarMov">Cancelar</button>`:""}<span class="err" id="mvErr"></span></div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="section-head" style="margin-bottom:10px"><div><h3>Extrato ${cs?"· "+esc(contaNome(cs)):"· todas as contas"}</h3><p class="note" style="margin:2px 0 0">Saldo no início de ${rotMes(mes)}: <b>${brl2.format(saldoAntes)}</b> · no fim: <b>${brl2.format(saldoAte(cs,fim))}</b></p></div>
+    <div class="row">
+      <div class="field"><label for="bfConta">Conta</label><select id="bfConta" data-bf="conta"><option value="">Todas as contas</option>${S.contas.map(c=>`<option value="${c.id}" ${c.id===cs?"selected":""}>${esc(c.nome)}</option>`).join("")}</select></div>
+      <div class="field"><label for="bfMes">Mês</label><input id="bfMes" type="month" data-bf="mes" value="${mes}"></div>
+      <div class="field"><label for="bfBusca">Buscar</label><input id="bfBusca" data-bf="busca" value="${esc(S.bf.busca)}" placeholder="Descrição ou categoria"></div>
+    </div></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Categoria</th><th class="n">Entrada</th><th class="n">Saída</th><th class="n">Saldo</th><th></th></tr></thead>
+    <tbody>${linhas||`<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Nenhum lançamento em ${rotMes(mes)}${cs?" nesta conta":""}${busca?" com essa busca":""}.</td></tr>`}
+      ${lista.length?`<tr class="total"><td colspan="4">Total do mês</td><td class="n pos">${brl2.format(ent)}</td><td class="n neg">${brl2.format(sai)}</td><td class="n">${busca?"":brl2.format(run)}</td><td></td></tr>`:""}</tbody></table></div>
+  <div style="height:14px"></div>
+  <div class="panel"><h3>Levar para o orçamento</h3>
+    <p class="note" style="margin-top:0">Soma os lançamentos de ${rotMes(d.mesRef)} (mês de referência do orçamento) por categoria e grava como <b>realizado</b> nas categorias de mesmo nome do cenário “${esc(S.nome)}”. ${mesRefMovs.length} lançamento${mesRefMovs.length===1?"":"s"} com categoria neste mês.</p>
+    <div class="row">${S.confirmReal?`<span style="font-size:.9rem">Substituir o realizado das categorias encontradas?</span><button class="btn primary" data-act="realOk">Sim, atualizar</button><button class="btn" data-act="realCancela">Cancelar</button>`:`<button class="btn" data-act="realizado" ${mesRefMovs.length?"":"disabled"}>Atualizar realizado do orçamento</button>`}<span class="muted" id="realMsg"></span></div>
   </div>`;
 }
+
 
 /* ============================ eventos ============================ */
 function setPath(o,p,v){const k=p.split(".");for(let i=0;i<k.length-1;i++)o=o[k[i]];o[k[k.length-1]]=v;}
@@ -538,8 +647,10 @@ document.addEventListener("change",async e=>{
   try{
     if(t.id==="selEmpresa"){if(t.value==="__nova"){S.tela="novaEmpresa";render();}else{await abrirEmpresa(t.value);}return;}
     if(t.id==="selPlano"){await abrirPlano(t.value);return;}
-    if(t.id==="imp"&&t.files[0]){const fr=new FileReader();fr.onload=async()=>{try{const j=JSON.parse(fr.result);await criarPlano((j.nome||"Cenário")+" (importado)",normaliza(j.dados||j));}catch(err){avisar("Arquivo inválido: não é um JSON de planejamento.");}};fr.readAsText(t.files[0]);return;}
     if(t.dataset.emp&&t.id.startsWith("ed")){const patch={[t.dataset.emp]:t.value.trim()};if(patch.nome==="")return avisar("A empresa precisa de um nome.");await store.updateEmpresa(S.empresaId,patch);Object.assign(empresaAtual(),patch);S.saveState="ok";S.saveMsg="Empresa atualizada";render();return;}
+    if(t.dataset.bf){S.bf[t.dataset.bf]=t.value;render();if(t.id==="bfBusca")document.getElementById("bfBusca")?.focus();return;}
+    if(t.id==="mvTipo"){const tr=t.value==="transferencia";document.getElementById("mvDestWrap").hidden=!tr;document.getElementById("mvCatWrap").hidden=tr;document.getElementById("mvContaLbl").textContent=tr?"Conta de origem":"Conta";return;}
+    if(t.id&&/^(mv|ct)/.test(t.id))return;
     if(t.dataset.ui){S[t.dataset.ui]=t.value;render();return;}
     if(t.dataset.bindNome!==undefined){S.nome=t.value.trim()||"Sem nome";agendarSalvar();render();return;}
     if(t.dataset.bind){let v=t.value;if(t.dataset.num!==undefined)v=num(v);if(t.dataset.bool!==undefined)v=v==="1";if(t.type==="month"&&!v)return;setPath(S.dados,t.dataset.bind,v);agendarSalvar();render();}
@@ -566,16 +677,37 @@ document.addEventListener("click",async e=>{
     case "del":delPath(d,b.dataset.path);agendarSalvar();render();break;
     case "duplicar":await salvar();await criarPlano(S.nome+" (cópia)",JSON.parse(JSON.stringify(d)));break;
     case "novoVazio":await criarPlano("Novo cenário",basico());S.aba="orcamento";render();break;
-    case "conectar":{const url=document.getElementById("cUrl").value.trim(),key=document.getElementById("cKey").value.trim();
-      if(!/^https:\/\/.+/.test(url)||key.length<20){avisar("Informe a URL (https://…supabase.co) e a chave anon.");break;}
-      lsSet(LS_CON,JSON.stringify({SUPABASE_URL:url,SUPABASE_ANON_KEY:key}));location.reload();break;}
-    case "desconectar":try{localStorage.removeItem(LS_CON)}catch(err){}if(window.PLANEJAMENTO_CONFIG?.SUPABASE_URL){avisar("A conexão está fixada no arquivo HTML (bloco CONFIGURAÇÃO).");break;}location.reload();break;
-    case "sql":S.showSql=!S.showSql;render();break;
-    case "copiarSql":case "copiar":{const ta=document.getElementById(a==="copiarSql"?"sqlTxt":"expTxt"),msg=document.getElementById(a==="copiarSql"?"sqlMsg":"copyMsg");
-      try{await navigator.clipboard.writeText(ta.value);msg.textContent="Copiado.";}catch(err){ta.select();msg.textContent="Texto selecionado: use Ctrl+C.";}break;}
-    case "exportar":{S.export=JSON.stringify({empresa:empresaAtual()?.nome,nome:S.nome,exportado_em:new Date().toISOString(),dados:d},null,2);
-      try{const u=URL.createObjectURL(new Blob([S.export],{type:"application/json"})),l=document.createElement("a");l.href=u;l.download=`planejamento-${(empresaAtual()?.nome+"-"+S.nome).normalize("NFD").replace(/[^\w]+/g,"-").toLowerCase()}.json`;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}catch(err){}
-      render();break;}
+    case "novaConta":S.contaEdit="nova";S.confirmDel="";render();window.scrollTo(0,0);break;
+    case "editarConta":S.contaEdit=b.dataset.id;S.confirmDel="";render();window.scrollTo(0,0);break;
+    case "cancelarConta":S.contaEdit=null;S.confirmDel="";render();break;
+    case "salvarConta":{const g=id=>document.getElementById(id).value.trim();const c={nome:g("ctNome"),banco:g("ctBanco"),agencia:g("ctAg"),numero:g("ctNum"),tipo:g("ctTipo"),saldo_inicial:num(g("ctSaldo")),data_saldo:g("ctData")||null};
+      if(!c.nome){avisar("Informe o nome da conta.");break;}
+      const id=S.contaEdit==="nova"?null:S.contaEdit,salva=await store.saveConta(id,c);
+      if(id)Object.assign(S.contas.find(x=>x.id===id),c);else S.contas.push(salva);
+      S.contaEdit=null;S.saveState="ok";S.saveMsg="Conta salva";render();break;}
+    case "excluirConta":S.confirmDel="conta";render();break;
+    case "excluirContaOk":{const id=S.contaEdit;await store.deleteConta(id);S.contas=S.contas.filter(c=>c.id!==id);S.movs=S.movs.filter(m=>m.conta_id!==id&&m.conta_destino_id!==id);
+      if(S.bf.conta===id)S.bf.conta="";S.contaEdit=null;S.confirmDel="";render();break;}
+    case "filtraConta":S.bf.conta=b.dataset.id;render();break;
+    case "salvarMov":{const g=id=>document.getElementById(id).value.trim(),err=document.getElementById("mvErr");
+      const m={data:g("mvData"),tipo:g("mvTipo"),conta_id:g("mvConta"),descricao:g("mvDesc"),valor:num(g("mvValor"))};
+      m.conta_destino_id=m.tipo==="transferencia"?g("mvDest"):null; m.categoria=m.tipo==="transferencia"?null:(g("mvCat")||null);
+      if(!m.data){err.textContent="Informe a data.";break;} if(!(m.valor>0)){err.textContent="Informe um valor maior que zero.";break;}
+      if(m.tipo==="transferencia"&&m.conta_destino_id===m.conta_id){err.textContent="Escolha contas de origem e destino diferentes.";break;}
+      err.textContent="Gravando…";const id=S.movEdit,salvo=await store.saveMov(id,m);
+      if(id)Object.assign(S.movs.find(x=>x.id===id),m);else S.movs.push(salvo);
+      S.movEdit=null;S.bf.mes=m.data.slice(0,7);S.saveState="ok";S.saveMsg="Lançamento gravado";render();
+      setTimeout(()=>document.getElementById("mvValor")?.focus(),0);break;}
+    case "editarMov":S.movEdit=b.dataset.id;render();document.getElementById("formMov")?.scrollIntoView({behavior:"smooth",block:"center"});break;
+    case "cancelarMov":S.movEdit=null;render();break;
+    case "delMov":if(b.dataset.ok!=="1"){b.dataset.ok="1";b.textContent="Excluir?";b.style.color="var(--bad)";b.style.fontSize=".8rem";break;}
+      await store.deleteMov(b.dataset.id);S.movs=S.movs.filter(m=>m.id!==b.dataset.id);if(S.movEdit===b.dataset.id)S.movEdit=null;render();break;
+    case "realizado":S.confirmReal=true;render();break;
+    case "realCancela":S.confirmReal=false;render();break;
+    case "realOk":{const tot={};for(const m of S.movs)if(m.data.slice(0,7)===d.mesRef&&m.tipo!=="transferencia"&&m.categoria){const k=m.categoria.trim().toLowerCase();tot[k]=tot[k]||{e:0,s:0};tot[k][m.tipo==="entrada"?"e":"s"]+=num(m.valor);}
+      let n=0;for(const c of d.categorias){const t=tot[c.nome.trim().toLowerCase()];if(t){c.realizado=Math.round((c.tipo==="receita"?t.e-t.s:t.s-t.e)*100)/100;n++;}}
+      S.confirmReal=false;agendarSalvar();render();const el=document.getElementById("realMsg");if(el)el.textContent=n?`${n} categoria${n>1?"s":""} atualizada${n>1?"s":""}.`:"Nenhuma categoria do orçamento tem o mesmo nome das categorias lançadas.";break;}
+    case "usarSaldoContas":d.saldoInicial=Math.round(saldoAte("",d.mesRef+"-01")*100)/100;agendarSalvar();render();break;
     case "csvFluxo":{const f=fluxo(d),csv=[["mes","entradas","despesas","parcelas","aportes_metas","liquido","saldo"],...f.map(m=>[m.ym,...["entradas","saidas","parcelas","metas","liquido","saldo"].map(k=>m[k].toFixed(2).replace(".",","))])].map(l=>l.join(";")).join("\n");
       try{await navigator.clipboard.writeText(csv);document.getElementById("csvMsg").textContent="CSV copiado: cole no Excel.";}catch(err){document.getElementById("csvMsg").textContent="Não foi possível copiar neste navegador.";}break;}
   }}catch(err){avisar(err.message||String(err));}
@@ -598,71 +730,6 @@ const tip=document.getElementById("tip");
 document.addEventListener("mousemove",e=>{const el=e.target.closest?.("[data-tip]");if(!el){tip.hidden=true;return;}tip.innerHTML=el.dataset.tip;tip.hidden=false;
   tip.style.left=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=(e.clientY+14+tip.offsetHeight>innerHeight?e.clientY-tip.offsetHeight-10:e.clientY+14)+"px";});
 window.addEventListener("beforeunload",e=>{if(S.saveState==="pending"){salvar();e.preventDefault();e.returnValue="";}});
-
-/* ============================ script do banco (Supabase) ============================ */
-const SQL_SCHEMA=`-- Planejamento Financeiro Empresarial — rode no SQL Editor do Supabase (pode rodar de novo sem problema)
-
-create table if not exists public.empresas (
-  id            uuid primary key default gen_random_uuid(),
-  nome          text not null,
-  cnpj          text, setor text, regime text, cidade text, responsavel text, contato text,
-  criado_em     timestamptz not null default now()
-);
-
-create table if not exists public.planejamentos (
-  id              uuid primary key default gen_random_uuid(),
-  empresa_id      uuid references public.empresas(id) on delete cascade,
-  nome            text not null,
-  dados           jsonb not null default '{}'::jsonb,
-  criado_em       timestamptz not null default now(),
-  atualizado_em   timestamptz not null default now(),
-  atualizado_por  text default (auth.jwt() ->> 'email')
-);
-alter table public.planejamentos add column if not exists empresa_id uuid references public.empresas(id) on delete cascade;
-create index if not exists planejamentos_empresa_idx on public.planejamentos (empresa_id);
-
-create or replace function public.fn_planejamentos_touch() returns trigger language plpgsql as $$
-begin
-  new.atualizado_em := now();
-  new.atualizado_por := coalesce(auth.jwt() ->> 'email', new.atualizado_por);
-  return new;
-end $$;
-drop trigger if exists trg_planejamentos_touch on public.planejamentos;
-create trigger trg_planejamentos_touch before update on public.planejamentos
-  for each row execute function public.fn_planejamentos_touch();
-
--- Histórico: cada gravação guarda a versão anterior
-create table if not exists public.planejamentos_historico (
-  id               bigint generated always as identity primary key,
-  planejamento_id  uuid not null references public.planejamentos(id) on delete cascade,
-  dados            jsonb not null,
-  salvo_em         timestamptz not null default now(),
-  salvo_por        text
-);
-create or replace function public.fn_planejamentos_historico() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if old.dados is distinct from new.dados then
-    insert into public.planejamentos_historico (planejamento_id, dados, salvo_por)
-    values (old.id, old.dados, old.atualizado_por);
-  end if;
-  return new;
-end $$;
-drop trigger if exists trg_planejamentos_historico on public.planejamentos;
-create trigger trg_planejamentos_historico after update on public.planejamentos
-  for each row execute function public.fn_planejamentos_historico();
-
--- Segurança: só usuários logados acessam (Authentication > Users)
-alter table public.empresas enable row level security;
-alter table public.planejamentos enable row level security;
-alter table public.planejamentos_historico enable row level security;
-drop policy if exists "logados acessam empresas" on public.empresas;
-drop policy if exists "logados acessam planejamentos" on public.planejamentos;
-drop policy if exists "logados leem historico" on public.planejamentos_historico;
-create policy "logados acessam empresas" on public.empresas for all to authenticated using (true) with check (true);
-create policy "logados acessam planejamentos" on public.planejamentos for all to authenticated using (true) with check (true);
-create policy "logados leem historico" on public.planejamentos_historico for select to authenticated using (true);
-`;
 
 /* ============================ início ============================ */
 {const a=lsGet(LS_KEY+"-aba");if(a&&ABAS.some(x=>x[0]===a))S.aba=a;}
