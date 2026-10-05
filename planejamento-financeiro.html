@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planejamento Financeiro Empresarial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<script>
+/* ===== CONFIGURAÇÃO (opcional) =====
+   Preencha com a URL e a chave "anon public" do Supabase (Project Settings > API)
+   para que todos os usuários já abram conectados. Se ficar vazio, a conexão pode
+   ser informada pela aba "Conexão e backup", ou o programa funciona só no navegador. */
+window.PLANEJAMENTO_CONFIG = {
+  SUPABASE_URL: "",
+  SUPABASE_ANON_KEY: ""
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+/* Layout: tema claro fixo, cabeçalho branco com seletores de empresa e cenário, abas, painéis em grade que viram uma coluna no celular */
+:root{
+  --bg:#F6F8FB; --surface:#FFFFFF; --surface-2:#F1F5F9; --fg:#1F2A3A; --muted:#64748B; --line:#E3E8EF;
+  --accent:#1E8A9C; --accent-soft:#E3F4F6; --accent-ink:#FFFFFF;
+  --s-in:#4A86C8; --s-out:#E8833A; --s-bal:#1E8A9C;
+  --good:#1F8A4C; --bad:#D03A2F; --warn:#B7791F;
+  --good-bg:#EAF7EF; --bad-bg:#FDEEEC; --warn-bg:#FFF6E5;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r:12px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2;font-weight:700}
+h2{font-size:1.35rem} h3{font-size:1.05rem}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px}
+
+header.top{background:var(--surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:12px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.1}
+.logo .mark{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);display:grid;place-items:center;flex:none}
+.logo small{display:block;font:600 .74rem/1.2 var(--f-body);color:var(--muted)}
+.top .grow{flex:1}
+.pick{display:grid;gap:2px}
+.pick label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pick select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;max-width:260px}
+.save{font-size:.82rem;color:var(--muted);white-space:nowrap}
+.save .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:6px;vertical-align:1px}
+.save.pending .dot{background:var(--warn)} .save.err{color:var(--bad)} .save.err .dot{background:var(--bad)}
+
+nav.tabs{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:11px 12px 8px;color:var(--muted);font-weight:600;white-space:nowrap;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+nav.tabs button:hover{color:var(--fg)}
+
+main{padding-block:22px 60px}
+.section-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:10px;margin-bottom:14px}
+.section-head p{margin:4px 0 0;color:var(--muted);max-width:70ch}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));align-items:start}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-width:0}
+.kpi .lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.kpi .val{font-family:var(--f-display);font-size:1.4rem;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .sub{font-size:.82rem;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.panel > h3{margin-bottom:10px}
+.muted{color:var(--muted)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.note{font-size:.86rem;color:var(--muted)}
+
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.chip.good{background:var(--good-bg);color:var(--good)} .chip.bad{background:var(--bad-bg);color:var(--bad)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.info{background:var(--accent-soft);color:var(--accent)}
+ul.alerts{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+ul.alerts li{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:9px;background:var(--surface-2)}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface-2);font-weight:700}
+td.n,th.n{text-align:right}
+tr.group td{background:var(--accent-soft);color:var(--accent);font-weight:700;font-family:var(--f-display)}
+tr.total td{font-weight:700;border-top:2px solid var(--line)}
+tbody tr:hover td{background:#FAFBFD}
+tr.group:hover td{background:var(--accent-soft)}
+td input,td select{width:100%;min-width:90px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px}
+td input:hover,td select:hover{border-color:var(--line)}
+td input:focus,td select:focus{border-color:var(--accent);background:var(--surface);outline:none}
+td input[type=number]{text-align:right}
+td input.name{min-width:250px}
+.meter{position:relative;height:8px;border-radius:4px;background:var(--surface-2);min-width:110px}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.meter b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--muted);left:80%}
+
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{color:var(--accent-ink);filter:brightness(1.06)}
+.btn.danger{color:var(--bad)} .btn.danger:hover{border-color:var(--bad)}
+.btn.small{padding:3px 9px;font-size:.84rem}
+.icon-btn{border:0;background:none;color:var(--muted);cursor:pointer;padding:4px 7px;border-radius:6px;font-size:.95rem}
+.icon-btn:hover{color:var(--bad);background:var(--bad-bg)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field input,.field select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;min-width:0;width:100%}
+.field input:focus,.field select:focus,textarea:focus{border-color:var(--accent);outline:none}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:.92rem}
+textarea{min-height:140px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.formgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart text{fill:var(--muted);font:13px var(--f-body)}
+.chart .grid line{stroke:var(--line);stroke-width:1}
+.chart .zero{stroke:#B8C2CF;stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.84rem;color:var(--muted);margin-top:6px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:var(--c);vertical-align:-1px}
+.legend span.line::before{height:3px;border-radius:2px;vertical-align:3px}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--fg);color:#fff;font-size:.82rem;padding:6px 9px;border-radius:6px;max-width:260px;box-shadow:0 4px 14px rgba(15,23,42,.15)}
+.hit{fill:transparent;cursor:crosshair}
+.goal{border:1px solid var(--line);border-radius:var(--r);padding:14px;background:var(--surface);display:grid;gap:10px;min-width:0}
+.goal .bar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.goal .bar i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.empty{border:1px dashed #C9D3DF;border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);background:var(--surface)}
+
+.center{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:linear-gradient(180deg,var(--accent-soft),var(--bg) 60%)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:26px;width:min(100%,560px);display:grid;gap:14px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+.card.narrow{width:min(100%,380px)}
+.err{color:var(--bad);font-size:.88rem;min-height:1.2em}
+.empresa-list{display:grid;gap:8px}
+.empresa-item{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.empresa-item.on{border-color:var(--accent);background:var(--accent-soft)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="tip" hidden></div>
+
+<script>
+/* ============================ utilidades ============================ */
+const LS_KEY="planejamento-financeiro-v2", LS_CON="planejamento-financeiro-conexao";
+const CFG=Object.assign({},window.PLANEJAMENTO_CONFIG||{},(()=>{try{return JSON.parse(localStorage.getItem(LS_CON))||{}}catch(e){return{}}})());
+const ONLINE=!!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&window.supabase);
+const sb=ONLINE?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY):null;
+const MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const brl=new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
+const brl2=new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
+const pct=v=>(isFinite(v)?(v*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):"–")+"%";
+const R=v=>brl.format(Math.round(v||0));
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36));
+const num=v=>{const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:0;};
+const hoje=new Date(), ymHoje=`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}`;
+function addMes(ym,k){let[y,m]=ym.split("-").map(Number);m+=k;y+=Math.floor((m-1)/12);m=((m-1)%12+12)%12+1;return`${y}-${String(m).padStart(2,"0")}`;}
+function difMes(a,b){const[y1,m1]=a.split("-").map(Number),[y2,m2]=b.split("-").map(Number);return(y2-y1)*12+(m2-m1);}
+const rotMes=ym=>{const[y,m]=ym.split("-");return`${MESES[+m-1]}/${y.slice(2)}`;};
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}}, lsSet=(k,v)=>{try{localStorage.setItem(k,v);return true}catch(e){return false}};
+
+/* ============================ modelos ============================ */
+function vazio(){return{mesRef:ymHoje,saldoInicial:0,incluirMetas:true,sazonal:Array(12).fill(0),categorias:[],dividas:[],metas:[],sim:{inicial:0,aporte:1000,taxaAno:10,anos:5}};}
+function basico(){
+  const d=vazio(), c=(tipo,nome,natureza)=>({id:uid(),tipo,nome,natureza,previsto:0,realizado:0,cresc:0});
+  d.categorias=[
+    c("receita","Venda de produtos","variavel"), c("receita","Prestação de serviços","variavel"),
+    c("despesa","Folha de pagamento e encargos","fixa"), c("despesa","Pró-labore","fixa"),
+    c("despesa","Aluguel e condomínio","fixa"), c("despesa","Água, energia e internet","fixa"),
+    c("despesa","Contabilidade","fixa"), c("despesa","Sistemas e software","fixa"), c("despesa","Marketing","fixa"),
+    c("despesa","Custo de mercadorias e insumos","variavel"), c("despesa","Comissões","variavel"),
+    c("despesa","Impostos sobre vendas","variavel"), c("despesa","Taxas de cartão e bancárias","variavel")
+  ];
+  return d;
+}
+function normaliza(d){const v=vazio();d={...v,...(d||{})};d.sim={...v.sim,...(d.sim||{})};if(!Array.isArray(d.sazonal)||d.sazonal.length!==12)d.sazonal=Array(12).fill(0);delete d.exemplo;return d;}
+const REGIMES=["","MEI","Simples Nacional","Lucro Presumido","Lucro Real","Outro"];
+
+/* ============================ cálculos ============================ */
+function pmtPrice(P,i,n){i=i/100;if(n<=0)return 0;return i===0?P/n:P*i/(1-Math.pow(1+i,-n));}
+function saldoDevedor(P,i,n,k){const p=pmtPrice(P,i,n);i=i/100;if(k>=n)return 0;if(i===0)return P-p*k;return P*Math.pow(1+i,k)-p*(Math.pow(1+i,k)-1)/i;}
+function infoDivida(d,ym){const n=num(d.parcelas),parcela=pmtPrice(num(d.valor),num(d.taxa),n),pagas=Math.min(n,Math.max(0,difMes(d.inicio,ym))),restantes=n-pagas,saldo=saldoDevedor(num(d.valor),num(d.taxa),n,pagas);return{parcela,pagas,restantes,saldo,jurosRest:Math.max(0,parcela*restantes-saldo),fim:addMes(d.inicio,n-1)};}
+const parcelaNoMes=(d,ym)=>{const k=difMes(d.inicio,ym);return(k>=0&&k<num(d.parcelas))?pmtPrice(num(d.valor),num(d.taxa),num(d.parcelas)):0;};
+function infoMeta(m,ym){const n=Math.max(1,difMes(ym,m.prazo)),r=Math.pow(1+num(m.taxaAno)/100,1/12)-1,fv=num(m.atual)*Math.pow(1+r,n),falta=Math.max(0,num(m.alvo)-fv);const aporte=falta<=0?0:(r===0?falta/n:falta*r/(Math.pow(1+r,n)-1));return{n,aporte,progresso:num(m.alvo)?num(m.atual)/num(m.alvo):0};}
+function resumo(d){
+  const rec=d.categorias.filter(c=>c.tipo==="receita"),des=d.categorias.filter(c=>c.tipo==="despesa"),s=(a,k)=>a.reduce((t,c)=>t+num(c[k]),0);
+  const recP=s(rec,"previsto"),recR=s(rec,"realizado"),desP=s(des,"previsto"),desR=s(des,"realizado");
+  const variaveis=s(des.filter(c=>c.natureza==="variavel"),"previsto"),fixas=s(des.filter(c=>c.natureza==="fixa"),"previsto");
+  const parcelas=d.dividas.reduce((t,x)=>t+parcelaNoMes(x,d.mesRef),0),mc=recP?(recP-variaveis)/recP:0,pe=mc>0?(fixas+parcelas)/mc:Infinity;
+  return{recP,recR,desP,desR,variaveis,fixas,parcelas,mc,pe,resultadoP:recP-desP-parcelas,resultadoR:recR-desR-parcelas,seguranca:recP&&isFinite(pe)?(recP-pe)/recP:0,comprometimento:recP?parcelas/recP:0};
+}
+function fluxo(d){
+  const out=[];let saldo=num(d.saldoInicial);const ap=d.incluirMetas?d.metas.map(m=>({m,a:infoMeta(m,d.mesRef).aporte})):[];
+  for(let k=0;k<12;k++){
+    const ym=addMes(d.mesRef,k),saz=1+num(d.sazonal[+ym.split("-")[1]-1])/100;let entradas=0,saidas=0;
+    for(const c of d.categorias){const v=num(c.previsto)*Math.pow(1+num(c.cresc)/100,k);if(c.tipo==="receita")entradas+=v*saz;else saidas+=c.natureza==="variavel"?v*saz:v;}
+    const parcelas=d.dividas.reduce((t,x)=>t+parcelaNoMes(x,ym),0),metas=ap.reduce((t,x)=>t+(difMes(ym,x.m.prazo)>=0?x.a:0),0),liquido=entradas-saidas-parcelas-metas;saldo+=liquido;
+    out.push({ym,entradas,saidas,parcelas,metas,liquido,saldo});
+  }
+  return out;
+}
+function simula(s){const r=Math.pow(1+num(s.taxaAno)/100,1/12)-1,meses=Math.max(1,Math.round(num(s.anos)*12));let saldo=num(s.inicial),aportado=saldo;const pts=[{m:0,saldo,aportado}];for(let k=1;k<=meses;k++){saldo=saldo*(1+r)+num(s.aporte);aportado+=num(s.aporte);pts.push({m:k,saldo,aportado});}return{pts,saldo,aportado,juros:saldo-aportado};}
+
+/* ============================ gráficos ============================ */
+function niceTicks(min,max,count=5){if(min===max)max=min+1;const span=max-min,mag=Math.pow(10,Math.floor(Math.log10(span/count))),step=[1,2,2.5,5,10].map(x=>x*mag).find(s=>span/s<=count)||10*mag,lo=Math.floor(min/step)*step,hi=Math.ceil(max/step)*step,t=[];for(let v=lo;v<=hi+step/2;v+=step)t.push(+v.toFixed(6));return t;}
+const kfmt=v=>{const a=Math.abs(v);return(v<0?"-":"")+(a>=1e6?(a/1e6).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mi":a>=1e3?Math.round(a/1e3)+" mil":Math.round(a));};
+function chart({labels,bars=[],lines=[],h=240}){
+  const W=640,H=h,pl=60,pr=12,pt=12,pb=28,iw=W-pl-pr,ih=H-pt-pb;
+  const all=[0,...bars.flatMap(s=>s.values),...lines.flatMap(s=>s.values)],ticks=niceTicks(Math.min(...all),Math.max(...all)),lo=ticks[0],hi=ticks[ticks.length-1];
+  const y=v=>pt+ih-(v-lo)/(hi-lo)*ih,n=labels.length,bw=iw/n;
+  let g=`<g class="grid">`+ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}"/><text x="${pl-8}" y="${y(t)+4}" text-anchor="end">${kfmt(t)}</text>`).join("")+`</g><line class="zero" x1="${pl}" x2="${W-pr}" y1="${y(0)}" y2="${y(0)}"/>`;
+  const nb=bars.length,gap=2,barW=Math.min(24,(bw*0.7-gap*(nb-1))/Math.max(nb,1));
+  labels.forEach((l,i)=>{g+=`<text x="${pl+bw*i+bw/2}" y="${H-8}" text-anchor="middle">${esc(l)}</text>`;});
+  bars.forEach((s,j)=>s.values.forEach((v,i)=>{if(!v)return;const x=pl+bw*i+bw/2-(nb*barW+(nb-1)*gap)/2+j*(barW+gap),y0=y(0),y1=y(v),top=Math.min(y0,y1),hh=Math.max(1,Math.abs(y1-y0)),r=Math.min(4,barW/2,hh);
+    const d=v>=0?`M${x},${y0}V${top+r}Q${x},${top} ${x+r},${top}H${x+barW-r}Q${x+barW},${top} ${x+barW},${top+r}V${y0}Z`:`M${x},${y0}V${top+hh-r}Q${x},${top+hh} ${x+r},${top+hh}H${x+barW-r}Q${x+barW},${top+hh} ${x+barW},${top+hh-r}V${y0}Z`;
+    g+=`<path d="${d}" fill="${s.color}"/>`;}));
+  lines.forEach(s=>{const li=s.values.length-1;g+=`<polyline points="${s.values.map((v,i)=>`${pl+bw*i+bw/2},${y(v)}`).join(" ")}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/><circle cx="${pl+bw*li+bw/2}" cy="${y(s.values[li])}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"/>`;});
+  labels.forEach((l,i)=>{const tip=[`<b>${esc(l)}</b>`,...bars.map(s=>`${esc(s.name)}: ${R(s.values[i])}`),...lines.map(s=>`${esc(s.name)}: ${R(s.values[i])}`)].join("<br>");g+=`<rect class="hit" x="${pl+bw*i}" y="${pt}" width="${bw}" height="${ih}" data-tip="${esc(tip)}"/>`;});
+  const leg=[...bars.map(s=>`<span style="--c:${s.color}">${esc(s.name)}</span>`),...lines.map(s=>`<span class="line" style="--c:${s.color}">${esc(s.name)}</span>`)];
+  return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${g}</svg>${leg.length>1?`<div class="legend">${leg.join("")}</div>`:""}`;
+}
+
+/* ============================ armazenamento (Supabase ou navegador) ============================ */
+const local={
+  db(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{empresas:[],planos:[]}}catch(e){return{empresas:[],planos:[]}}},
+  put(db){if(!lsSet(LS_KEY,JSON.stringify(db)))throw new Error("O navegador bloqueou o armazenamento local.");}
+};
+const store={
+  async listEmpresas(){if(ONLINE){const{data,error}=await sb.from("empresas").select("*").order("nome");if(error)throw error;return data;}return local.db().empresas.sort((a,b)=>a.nome.localeCompare(b.nome));},
+  async insertEmpresa(e){if(ONLINE){const{data,error}=await sb.from("empresas").insert(e).select().single();if(error)throw error;return data;}const db=local.db(),x={...e,id:uid(),criado_em:new Date().toISOString()};db.empresas.push(x);local.put(db);return x;},
+  async updateEmpresa(id,patch){if(ONLINE){const{error}=await sb.from("empresas").update(patch).eq("id",id);if(error)throw error;return;}const db=local.db();Object.assign(db.empresas.find(e=>e.id===id),patch);local.put(db);},
+  async deleteEmpresa(id){if(ONLINE){const{error}=await sb.from("empresas").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.empresas=db.empresas.filter(e=>e.id!==id);db.planos=db.planos.filter(p=>p.empresa_id!==id);local.put(db);},
+  async listPlanos(eid){if(ONLINE){const{data,error}=await sb.from("planejamentos").select("id,nome,atualizado_em,atualizado_por").eq("empresa_id",eid).order("criado_em");if(error)throw error;return data;}return local.db().planos.filter(p=>p.empresa_id===eid).map(({dados,...p})=>p);},
+  async getPlano(id){if(ONLINE){const{data,error}=await sb.from("planejamentos").select("*").eq("id",id).single();if(error)throw error;return data;}return local.db().planos.find(p=>p.id===id);},
+  async insertPlano(eid,nome,dados){if(ONLINE){const{data,error}=await sb.from("planejamentos").insert({empresa_id:eid,nome,dados}).select("id,nome").single();if(error)throw error;return data;}const db=local.db(),p={id:uid(),empresa_id:eid,nome,dados,atualizado_em:new Date().toISOString()};db.planos.push(p);local.put(db);return p;},
+  async updatePlano(id,patch){if(ONLINE){const{error}=await sb.from("planejamentos").update(patch).eq("id",id);if(error)throw error;return;}const db=local.db(),p=db.planos.find(p=>p.id===id);if(p){Object.assign(p,patch,{atualizado_em:new Date().toISOString()});local.put(db);}},
+  async deletePlano(id){if(ONLINE){const{error}=await sb.from("planejamentos").delete().eq("id",id);if(error)throw error;return;}const db=local.db();db.planos=db.planos.filter(p=>p.id!==id);local.put(db);}
+};
+
+/* ============================ estado ============================ */
+const S={user:null,carregando:true,erro:"",empresas:[],empresaId:null,planos:[],atualId:null,dados:null,nome:"",info:"",aba:"visao",tela:"app",
+  saveState:"ok",saveMsg:"",confirmDel:"",export:"",showSql:false,simDiv:0,extra:10000};
+let saveTimer=null;
+const empresaAtual=()=>S.empresas.find(e=>e.id===S.empresaId);
+
+async function iniciar(){
+  S.carregando=true;S.erro="";render();
+  try{
+    S.empresas=await store.listEmpresas();
+    if(!S.empresas.length){S.tela="novaEmpresa";S.carregando=false;render();return;}
+    const pref=lsGet(LS_KEY+"-empresa");
+    await abrirEmpresa(S.empresas.find(e=>e.id===pref)?.id||S.empresas[0].id);
+  }catch(err){S.erro=err.message||String(err);}
+  S.carregando=false;render();
+}
+async function abrirEmpresa(id){
+  S.empresaId=id;lsSet(LS_KEY+"-empresa",id);S.tela="app";
+  S.planos=await store.listPlanos(id);
+  if(!S.planos.length){S.planos=[await store.insertPlano(id,"Cenário base",vazio())];}
+  const pref=lsGet(LS_KEY+"-plano-"+id);
+  await abrirPlano(S.planos.find(p=>p.id===pref)?.id||S.planos[0].id);
+}
+async function abrirPlano(id){
+  const p=await store.getPlano(id);
+  S.dados=normaliza(p.dados);S.nome=p.nome;S.atualId=id;S.confirmDel="";S.export="";
+  S.info=p.atualizado_por?`Última alteração por ${p.atualizado_por} em ${new Date(p.atualizado_em).toLocaleString("pt-BR")}.`:"";
+  lsSet(LS_KEY+"-plano-"+S.empresaId,id);render();
+}
+async function criarPlano(nome,dados){const p=await store.insertPlano(S.empresaId,nome,dados);S.planos.push({id:p.id,nome});await abrirPlano(p.id);}
+function agendarSalvar(){S.saveState="pending";atualizarSave();clearTimeout(saveTimer);saveTimer=setTimeout(salvar,800);}
+async function salvar(){
+  try{await store.updatePlano(S.atualId,{nome:S.nome,dados:S.dados});const pl=S.planos.find(p=>p.id===S.atualId);if(pl)pl.nome=S.nome;
+    S.saveState="ok";S.saveMsg="Salvo às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}
+  catch(e){S.saveState="err";S.saveMsg="Erro ao salvar: "+(e.message||e);}
+  atualizarSave();
+}
+function atualizarSave(){const el=document.getElementById("save");if(!el)return;el.className="save "+(S.saveState==="pending"?"pending":S.saveState==="err"?"err":"");el.innerHTML=`<span class="dot"></span>${esc(S.saveState==="pending"?"Salvando…":S.saveMsg||(ONLINE?"Sincronizado":"Salvo neste navegador"))}`;}
+function avisar(msg){S.saveState="err";S.saveMsg=msg;atualizarSave();}
+
+/* ============================ telas ============================ */
+const ABAS=[["visao","Visão geral"],["orcamento","Orçamento"],["fluxo","Fluxo de caixa"],["metas","Metas e investimentos"],["dividas","Dívidas"],["empresa","Empresa e cenários"],["conexao","Conexão e backup"]];
+const LOGO=`<span class="mark"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="3.5" height="7" rx="1" fill="var(--s-in)"/><rect x="8.25" y="7" width="3.5" height="11" rx="1" fill="var(--accent)"/><rect x="14.5" y="3" width="3.5" height="15" rx="1" fill="var(--s-out)"/></svg></span>`;
+
+function render(){
+  const app=document.getElementById("app");
+  if(ONLINE&&!S.user){app.innerHTML=telaLogin();return;}
+  if(S.erro){app.innerHTML=`<div class="center"><div class="card"><h2>Não foi possível carregar</h2><p class="neg">${esc(S.erro)}</p><p class="muted">Confira se o script SQL foi executado no Supabase e se a URL e a chave estão corretas.</p><div class="row"><button class="btn primary" data-act="recarregar">Tentar de novo</button><button class="btn" data-act="desconectar">Usar sem Supabase</button></div></div></div>`;return;}
+  if(S.carregando){app.innerHTML=`<div class="center"><div class="muted">Carregando…</div></div>`;return;}
+  if(S.tela==="novaEmpresa"){app.innerHTML=telaNovaEmpresa();return;}
+  const y=window.scrollY,emp=empresaAtual();
+  app.innerHTML=`
+  <header class="top"><div class="wrap">
+    <div class="logo">${LOGO}<div>Planejamento Financeiro<small>${esc(emp?.nome||"")}</small></div></div>
+    <div class="grow"></div>
+    <div class="pick"><label for="selEmpresa">Empresa</label><select id="selEmpresa">${S.empresas.map(e=>`<option value="${e.id}" ${e.id===S.empresaId?"selected":""}>${esc(e.nome)}</option>`).join("")}<option value="__nova">+ Cadastrar nova empresa…</option></select></div>
+    <div class="pick"><label for="selPlano">Cenário</label><select id="selPlano">${S.planos.map(p=>`<option value="${p.id}" ${p.id===S.atualId?"selected":""}>${esc(p.nome)}</option>`).join("")}</select></div>
+    <span id="save" class="save"></span>
+    ${ONLINE?`<button class="btn small" data-act="sair" title="${esc(S.user?.email)}">Sair</button>`:""}
+  </div></header>
+  <nav class="tabs"><div class="wrap" role="tablist">${ABAS.map(([k,t])=>`<button role="tab" aria-selected="${S.aba===k}" data-act="aba" data-aba="${k}">${t}</button>`).join("")}</div></nav>
+  <main class="wrap">${({visao,orcamento,fluxo:telaFluxo,metas,dividas,empresa:telaEmpresa,conexao:telaConexao})[S.aba]()}</main>`;
+  atualizarSave();window.scrollTo(0,y);
+}
+
+function camposEmpresa(e={},pref="ne"){
+  return `<div class="formgrid">
+    <div class="field" style="grid-column:1/-1"><label for="${pref}Nome">Nome da empresa *</label><input id="${pref}Nome" data-emp="nome" value="${esc(e.nome)}" required placeholder="Razão social ou nome fantasia"></div>
+    <div class="field"><label for="${pref}Cnpj">CNPJ</label><input id="${pref}Cnpj" data-emp="cnpj" value="${esc(e.cnpj)}" placeholder="00.000.000/0000-00"></div>
+    <div class="field"><label for="${pref}Setor">Setor / atividade</label><input id="${pref}Setor" data-emp="setor" value="${esc(e.setor)}" placeholder="Ex.: comércio varejista"></div>
+    <div class="field"><label for="${pref}Regime">Regime tributário</label><select id="${pref}Regime" data-emp="regime">${REGIMES.map(r=>`<option value="${r}" ${r===(e.regime||"")?"selected":""}>${r||"Não informado"}</option>`).join("")}</select></div>
+    <div class="field"><label for="${pref}Cidade">Cidade / UF</label><input id="${pref}Cidade" data-emp="cidade" value="${esc(e.cidade)}"></div>
+    <div class="field"><label for="${pref}Resp">Responsável</label><input id="${pref}Resp" data-emp="responsavel" value="${esc(e.responsavel)}"></div>
+    <div class="field"><label for="${pref}Contato">Telefone / e-mail</label><input id="${pref}Contato" data-emp="contato" value="${esc(e.contato)}"></div>
+  </div>`;
+}
+function telaNovaEmpresa(){
+  const primeira=!S.empresas.length;
+  return `<div class="center"><form class="card" id="fEmpresa">
+    <div class="logo">${LOGO}<div>Planejamento Financeiro<small>${primeira?"Comece cadastrando uma empresa":"Nova empresa"}</small></div></div>
+    <div><h2>${primeira?"Cadastre a primeira empresa":"Cadastrar empresa"}</h2><p class="muted" style="margin:4px 0 0">Cada empresa tem seu próprio orçamento, fluxo de caixa, metas, dívidas e cenários.</p></div>
+    ${camposEmpresa({},"ne")}
+    <label class="check"><input type="checkbox" id="neBasico" checked> <span>Criar com categorias básicas de receitas e despesas (valores zerados, você edita depois)</span></label>
+    <div class="err" id="neErr"></div>
+    <div class="row"><button class="btn primary" type="submit">Cadastrar e começar</button>${primeira?"":`<button class="btn" type="button" data-act="cancelarEmpresa">Cancelar</button>`}</div>
+    ${!ONLINE?`<p class="note" style="margin:0">Modo local: os dados ficam só neste navegador. Para usar com a equipe, conecte ao Supabase na aba “Conexão e backup”.</p>`:""}
+  </form></div>`;
+}
+function telaLogin(){
+  return `<div class="center"><form class="card narrow" id="fLogin">
+    <div class="logo">${LOGO}<div>Planejamento Financeiro<small>Acesso</small></div></div>
+    <div class="field"><label for="lEmail">E-mail</label><input id="lEmail" type="email" required autocomplete="email"></div>
+    <div class="field"><label for="lSenha">Senha</label><input id="lSenha" type="password" required autocomplete="current-password"></div>
+    <div class="err" id="lErr"></div>
+    <button class="btn primary" type="submit">Entrar</button>
+    <button class="btn" type="button" data-act="desconectar">Usar sem Supabase (modo local)</button>
+  </form></div>`;
+}
+const kpi=(lbl,val,sub="",cls="")=>`<div class="kpi"><div class="lbl">${lbl}</div><div class="val ${cls}">${val}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`;
+
+function visao(){
+  const d=S.dados,r=resumo(d),f=fluxo(d),menor=f.reduce((a,b)=>b.saldo<a.saldo?b:a,f[0]),al=[];
+  const temDados=r.recP>0||r.desP>0;
+  if(!temDados) al.push(["info","Comece pelo orçamento","Lance as receitas e despesas previstas na aba Orçamento mensal. Os indicadores e a projeção aparecem aqui."]);
+  else{
+    const neg=f.find(m=>m.saldo<0); if(neg) al.push(["bad","Caixa negativo",`O saldo projetado fica negativo em ${rotMes(neg.ym)} (${R(neg.saldo)}).`]);
+    if(r.recP>0&&r.recP<r.pe) al.push(["bad","Abaixo do ponto de equilíbrio",`A receita prevista (${R(r.recP)}) não cobre custos fixos e parcelas. Faltam ${isFinite(r.pe)?R(r.pe-r.recP):"—"} por mês.`]);
+    else if(r.recP>0&&r.seguranca<0.15) al.push(["warn","Margem de segurança baixa",`A receita prevista está só ${pct(r.seguranca)} acima do ponto de equilíbrio.`]);
+    if(r.comprometimento>0.15) al.push(["warn","Dívidas pesando",`As parcelas consomem ${pct(r.comprometimento)} da receita prevista.`]);
+    d.categorias.filter(c=>c.tipo==="despesa"&&num(c.previsto)>0&&num(c.realizado)>num(c.previsto)*1.05).forEach(c=>al.push(["warn","Despesa acima do orçado",`${esc(c.nome)}: ${R(c.realizado)} contra ${R(c.previsto)} previsto.`]));
+    d.categorias.filter(c=>c.tipo==="receita"&&num(c.previsto)>0&&num(c.realizado)>0&&num(c.realizado)<num(c.previsto)*0.95).forEach(c=>al.push(["warn","Receita abaixo do previsto",`${esc(c.nome)}: ${R(c.realizado)} contra ${R(c.previsto)} previsto.`]));
+    if(!al.length) al.push(["good","Tudo dentro do planejado","Nenhum alerta para o mês de referência."]);
+  }
+  const rot={good:"✓ OK",bad:"● Crítico",warn:"▲ Atenção",info:"i Primeiro passo"};
+  return `
+  <div class="section-head"><div><h2>Visão geral · ${rotMes(d.mesRef)}</h2><p>${esc(empresaAtual()?.nome)} · cenário “${esc(S.nome)}”. Resumo do mês de referência e da projeção de 12 meses.</p></div></div>
+  <div class="kpis">
+    ${kpi("Resultado previsto",R(r.resultadoP),`Margem ${pct(r.recP?r.resultadoP/r.recP:0)}`,r.resultadoP<0?"neg":"")}
+    ${kpi("Resultado realizado",R(r.resultadoR),`Receita realizada ${R(r.recR)}`,r.resultadoR<0?"neg":"")}
+    ${kpi("Ponto de equilíbrio",isFinite(r.pe)?R(r.pe):"–",`Margem de contribuição ${pct(r.mc)}`)}
+    ${kpi("Margem de segurança",temDados&&isFinite(r.pe)?pct(r.seguranca):"–","Receita acima do equilíbrio",r.seguranca<0?"neg":"")}
+    ${kpi("Saldo em 12 meses",R(f[11].saldo),`em ${rotMes(f[11].ym)}`,f[11].saldo<0?"neg":"")}
+    ${kpi("Menor saldo projetado",R(menor.saldo),`em ${rotMes(menor.ym)}`,menor.saldo<0?"neg":"")}
+  </div>
+  <div class="grid g2">
+    <div class="panel"><h3>Saldo de caixa projetado</h3>${chart({labels:f.map(m=>rotMes(m.ym)),lines:[{name:"Saldo acumulado",color:"var(--s-bal)",values:f.map(m=>m.saldo)}]})}</div>
+    <div class="panel"><h3>Pontos de atenção</h3><ul class="alerts">${al.map(([t,a,b])=>`<li><span class="chip ${t}">${rot[t]}</span><div><b>${a}</b><br><span class="muted">${b}</span></div></li>`).join("")}</ul></div>
+  </div>`;
+}
+
+function linhaCat(c,i){
+  const p=num(c.previsto),re=num(c.realizado),dif=re-p,exec=p?re/p:0,ruim=c.tipo==="despesa"?dif>0:dif<0;
+  const cor=Math.abs(dif)<=p*0.05?"var(--accent)":ruim?"var(--bad)":"var(--good)";
+  return `<tr>
+    <td><input class="name" data-bind="categorias.${i}.nome" value="${esc(c.nome)}" aria-label="Categoria"></td>
+    <td>${c.tipo==="despesa"?`<select data-bind="categorias.${i}.natureza" aria-label="Natureza"><option value="fixa" ${c.natureza==="fixa"?"selected":""}>Fixa</option><option value="variavel" ${c.natureza==="variavel"?"selected":""}>Variável</option></select>`:`<span class="muted" style="padding-left:6px">—</span>`}</td>
+    <td class="n"><input type="number" step="100" data-num data-bind="categorias.${i}.previsto" value="${p}" aria-label="Previsto"></td>
+    <td class="n"><input type="number" step="100" data-num data-bind="categorias.${i}.realizado" value="${re}" aria-label="Realizado"></td>
+    <td class="n ${ruim&&Math.abs(dif)>p*0.05?"neg":""}">${dif>0?"+":""}${R(dif)}</td>
+    <td><div class="meter" data-tip="${esc(`${c.nome}<br>Executado: ${pct(exec)} do previsto`)}"><i style="width:${Math.min(100,exec/1.25*100)}%;background:${cor}"></i><b></b></div></td>
+    <td class="n"><input type="number" step="0.1" data-num data-bind="categorias.${i}.cresc" value="${num(c.cresc)}" aria-label="Crescimento mensal %" style="min-width:70px"></td>
+    <td><button class="icon-btn" data-act="del" data-path="categorias.${i}" aria-label="Remover ${esc(c.nome)}">✕</button></td></tr>`;
+}
+function orcamento(){
+  const d=S.dados,r=resumo(d);
+  const bloco=(tipo,titulo)=>{const it=d.categorias.map((c,i)=>[c,i]).filter(([c])=>c.tipo===tipo),tp=it.reduce((t,[c])=>t+num(c.previsto),0),tr=it.reduce((t,[c])=>t+num(c.realizado),0);
+    return `<tr class="group"><td colspan="8">${titulo}</td></tr>${it.map(([c,i])=>linhaCat(c,i)).join("")}
+      <tr><td colspan="8"><button class="btn small" data-act="addCat" data-tipo="${tipo}">+ Adicionar ${tipo==="receita"?"receita":"despesa"}</button></td></tr>
+      <tr class="total"><td>Total de ${titulo.toLowerCase()}</td><td></td><td class="n">${R(tp)}</td><td class="n">${R(tr)}</td><td class="n">${R(tr-tp)}</td><td colspan="3"></td></tr>`;};
+  return `
+  <div class="section-head"><div><h2>Orçamento mensal</h2><p>Previsto × realizado por categoria. Despesas fixas e variáveis alimentam o ponto de equilíbrio; o crescimento % ao mês alimenta a projeção de 12 meses.</p></div>
+    <div class="field"><label for="mesRef">Mês de referência</label><input id="mesRef" type="month" data-bind="mesRef" value="${d.mesRef}"></div></div>
+  <div class="kpis">${kpi("Receita prevista",R(r.recP),`Realizada ${R(r.recR)}`)}${kpi("Despesa prevista",R(r.desP),`Realizada ${R(r.desR)}`)}${kpi("Parcelas de dívidas",R(r.parcelas),"vêm da aba Dívidas")}${kpi("Resultado previsto",R(r.resultadoP),`Realizado ${R(r.resultadoR)}`,r.resultadoP<0?"neg":"")}</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Categoria</th><th>Natureza</th><th class="n">Previsto</th><th class="n">Realizado</th><th class="n">Diferença</th><th>Execução</th><th class="n">Cresc. % a.m.</th><th></th></tr></thead>
+    <tbody>${bloco("receita","Receitas")}${bloco("despesa","Despesas")}
+      <tr class="total"><td>Parcelas de dívidas</td><td></td><td class="n">${R(r.parcelas)}</td><td class="n">${R(r.parcelas)}</td><td colspan="4"></td></tr>
+      <tr class="total"><td>Resultado</td><td></td><td class="n ${r.resultadoP<0?"neg":""}">${R(r.resultadoP)}</td><td class="n ${r.resultadoR<0?"neg":""}">${R(r.resultadoR)}</td><td class="n">${R(r.resultadoR-r.resultadoP)}</td><td colspan="3"></td></tr>
+    </tbody></table></div>
+  <p class="note">O traço na barra de execução marca 100% do previsto. Verde: melhor que o previsto; vermelho: pior (mais de 5% de desvio).</p>
+  <div class="panel"><h3>Ponto de equilíbrio</h3><div class="formgrid">
+    <div><div class="muted">Custos fixos + parcelas</div><b>${R(r.fixas+r.parcelas)}</b></div>
+    <div><div class="muted">Custos variáveis</div><b>${R(r.variaveis)}</b></div>
+    <div><div class="muted">Margem de contribuição</div><b>${pct(r.mc)}</b></div>
+    <div><div class="muted">Receita mínima mensal</div><b>${isFinite(r.pe)?R(r.pe):"–"}</b></div>
+  </div></div>`;
+}
+
+function telaFluxo(){
+  const d=S.dados,f=fluxo(d),lab=f.map(m=>rotMes(m.ym)),tot=k=>f.reduce((t,m)=>t+m[k],0);
+  return `
+  <div class="section-head"><div><h2>Fluxo de caixa · 12 meses</h2><p>Projeção a partir do orçamento previsto, com crescimento por categoria, sazonalidade, parcelas das dívidas e aportes das metas.</p></div>
+    <div class="row">
+      <div class="field"><label for="saldoIni">Saldo inicial em caixa</label><input id="saldoIni" type="number" step="1000" data-num data-bind="saldoInicial" value="${num(d.saldoInicial)}"></div>
+      <div class="field"><label for="incMetas">Aportes das metas</label><select id="incMetas" data-bind="incluirMetas" data-bool><option value="1" ${d.incluirMetas?"selected":""}>Incluir no fluxo</option><option value="0" ${!d.incluirMetas?"selected":""}>Não incluir</option></select></div>
+    </div></div>
+  <div class="grid g2">
+    <div class="panel"><h3>Entradas × saídas</h3>${chart({labels:lab,bars:[{name:"Entradas",color:"var(--s-in)",values:f.map(m=>m.entradas)},{name:"Saídas (despesas, parcelas e metas)",color:"var(--s-out)",values:f.map(m=>m.saidas+m.parcelas+m.metas)}]})}</div>
+    <div class="panel"><h3>Saldo acumulado</h3>${chart({labels:lab,lines:[{name:"Saldo acumulado",color:"var(--s-bal)",values:f.map(m=>m.saldo)}]})}</div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Mês</th><th class="n">Sazonalidade %</th><th class="n">Entradas</th><th class="n">Despesas</th><th class="n">Parcelas</th><th class="n">Aportes metas</th><th class="n">Líquido</th><th class="n">Saldo</th></tr></thead>
+    <tbody>${f.map(m=>{const mi=+m.ym.split("-")[1]-1;return`<tr><td>${rotMes(m.ym)}</td>
+      <td class="n"><input type="number" step="1" data-num data-bind="sazonal.${mi}" value="${num(d.sazonal[mi])}" aria-label="Sazonalidade ${rotMes(m.ym)}" style="min-width:70px"></td>
+      <td class="n">${R(m.entradas)}</td><td class="n">${R(m.saidas)}</td><td class="n">${R(m.parcelas)}</td><td class="n">${R(m.metas)}</td>
+      <td class="n ${m.liquido<0?"neg":""}">${R(m.liquido)}</td><td class="n ${m.saldo<0?"neg":""}"><b>${R(m.saldo)}</b></td></tr>`;}).join("")}
+      <tr class="total"><td>Total</td><td></td><td class="n">${R(tot("entradas"))}</td><td class="n">${R(tot("saidas"))}</td><td class="n">${R(tot("parcelas"))}</td><td class="n">${R(tot("metas"))}</td><td class="n">${R(tot("liquido"))}</td><td class="n">${R(f[11].saldo)}</td></tr>
+    </tbody></table></div>
+  <p class="note">A sazonalidade ajusta receitas e despesas variáveis do mês (ex.: −10 em janeiro, +8 em dezembro). Despesas fixas não mudam.</p>
+  <div class="row"><button class="btn" data-act="csvFluxo">Copiar fluxo em CSV</button><span class="muted" id="csvMsg"></span></div>`;
+}
+
+function metas(){
+  const d=S.dados,s=simula(d.sim),meses=s.pts.length-1,passo=Math.max(1,Math.ceil(meses/12)),am=s.pts.filter(p=>p.m%passo===0||p.m===meses);
+  return `
+  <div class="section-head"><div><h2>Metas e investimentos</h2><p>Para cada meta, o aporte mensal necessário considerando o que já foi guardado e o rendimento esperado.</p></div><button class="btn primary" data-act="addMeta">+ Nova meta</button></div>
+  <div class="grid g2">${d.metas.map((m,i)=>{const x=infoMeta(m,d.mesRef);return`<div class="goal">
+    <div class="row" style="justify-content:space-between;align-items:center"><input data-bind="metas.${i}.nome" value="${esc(m.nome)}" aria-label="Nome da meta" style="flex:1;font:700 1.02rem var(--f-display);border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0"><button class="icon-btn" data-act="del" data-path="metas.${i}" aria-label="Remover meta">✕</button></div>
+    <div class="formgrid">
+      <div class="field"><label for="ma${i}">Valor da meta</label><input id="ma${i}" type="number" step="1000" data-num data-bind="metas.${i}.alvo" value="${num(m.alvo)}"></div>
+      <div class="field"><label for="mt${i}">Já guardado</label><input id="mt${i}" type="number" step="1000" data-num data-bind="metas.${i}.atual" value="${num(m.atual)}"></div>
+      <div class="field"><label for="mp${i}">Prazo</label><input id="mp${i}" type="month" data-bind="metas.${i}.prazo" value="${m.prazo}"></div>
+      <div class="field"><label for="mr${i}">Rendimento % a.a.</label><input id="mr${i}" type="number" step="0.1" data-num data-bind="metas.${i}.taxaAno" value="${num(m.taxaAno)}"></div>
+    </div>
+    <div class="bar" data-tip="${esc(pct(x.progresso)+" da meta")}"><i style="width:${Math.min(100,x.progresso*100)}%"></i></div>
+    <div class="row" style="justify-content:space-between"><span class="muted">${pct(x.progresso)} atingido · ${x.n} meses</span><span>Aporte necessário: <b>${brl2.format(x.aporte)}</b>/mês</span></div></div>`;}).join("")||`<div class="empty">Nenhuma meta cadastrada. Use “+ Nova meta” para planejar uma reserva, um investimento ou uma compra.</div>`}</div>
+  <div style="height:22px"></div>
+  <div class="section-head"><div><h3>Simulador de investimento</h3><p>Juros compostos com aporte mensal fixo.</p></div></div>
+  <div class="grid g2">
+    <div class="panel"><div class="formgrid">
+      <div class="field"><label for="si">Valor inicial</label><input id="si" type="number" step="1000" data-num data-bind="sim.inicial" value="${num(d.sim.inicial)}"></div>
+      <div class="field"><label for="sa">Aporte mensal</label><input id="sa" type="number" step="100" data-num data-bind="sim.aporte" value="${num(d.sim.aporte)}"></div>
+      <div class="field"><label for="st">Rendimento % a.a.</label><input id="st" type="number" step="0.1" data-num data-bind="sim.taxaAno" value="${num(d.sim.taxaAno)}"></div>
+      <div class="field"><label for="sn">Prazo (anos)</label><input id="sn" type="number" step="1" min="1" max="40" data-num data-bind="sim.anos" value="${num(d.sim.anos)}"></div>
+    </div><div class="kpis" style="margin:16px 0 0">${kpi("Valor final",R(s.saldo))}${kpi("Total aportado",R(s.aportado))}${kpi("Rendimento",R(s.juros))}</div></div>
+    <div class="panel"><h3>Evolução do patrimônio</h3>${chart({labels:am.map(p=>p.m%12===0?`ano ${p.m/12}`:`m${p.m}`),lines:[{name:"Saldo com rendimento",color:"var(--s-in)",values:am.map(p=>p.saldo)},{name:"Total aportado",color:"var(--s-out)",values:am.map(p=>p.aportado)}]})}</div>
+  </div>`;
+}
+
+function dividas(){
+  const d=S.dados,r=resumo(d),inf=d.dividas.map(x=>infoDivida(x,d.mesRef)),tot=k=>inf.reduce((t,x)=>t+x[k],0);
+  const sel=Math.min(+S.simDiv||0,Math.max(0,d.dividas.length-1)),extra=num(S.extra);let sim="";
+  if(d.dividas.length){const x=inf[sel],i=num(d.dividas[sel].taxa)/100,novo=Math.max(0,x.saldo-extra);
+    if(x.restantes<=0) sim=`<p class="muted">Esta dívida já está quitada no mês de referência.</p>`;
+    else if(novo<=0) sim=`<p>Com ${R(extra)} a dívida é quitada hoje (saldo ${R(x.saldo)}), economizando <b class="pos">${R(x.jurosRest)}</b> em juros.</p>`;
+    else{const n2=i===0?Math.ceil(novo/x.parcela):Math.ceil(-Math.log(1-novo*i/x.parcela)/Math.log(1+i)),eco=x.parcela*x.restantes-(extra+(i===0?novo:x.parcela*n2));
+      sim=`<div class="formgrid"><div><div class="muted">Prazo restante</div><b>${x.restantes} → ${n2} parcelas</b></div><div><div class="muted">Termina em</div><b>${rotMes(addMes(d.mesRef,n2-1))}</b></div><div><div class="muted">Economia de juros</div><b class="pos">${R(eco)}</b></div></div><p class="note" style="margin-bottom:0">Amortização extraordinária reduzindo o prazo e mantendo a parcela (tabela Price).</p>`;}}
+  return `
+  <div class="section-head"><div><h2>Dívidas e parcelamentos</h2><p>Financiamentos e parcelamentos pela tabela Price. As parcelas entram automaticamente no orçamento e no fluxo de caixa.</p></div><button class="btn primary" data-act="addDiv">+ Nova dívida</button></div>
+  <div class="kpis">${kpi("Saldo devedor total",R(tot("saldo")))}${kpi("Parcelas no mês",R(r.parcelas),r.recP?`${pct(r.comprometimento)} da receita prevista`:"",r.comprometimento>0.15?"neg":"")}${kpi("Juros a pagar",R(tot("jurosRest")),"até o fim dos contratos")}</div>
+  ${d.dividas.length?`<div class="tbl-wrap"><table>
+    <thead><tr><th>Dívida</th><th class="n">Valor financiado</th><th class="n">Juros % a.m.</th><th class="n">Nº parcelas</th><th>1ª parcela</th><th class="n">Parcela</th><th class="n">Pagas</th><th class="n">Saldo devedor</th><th>Término</th><th></th></tr></thead>
+    <tbody>${d.dividas.map((x,i)=>{const f=inf[i];return`<tr>
+      <td><input class="name" data-bind="dividas.${i}.nome" value="${esc(x.nome)}" aria-label="Nome"></td>
+      <td class="n"><input type="number" step="1000" data-num data-bind="dividas.${i}.valor" value="${num(x.valor)}" aria-label="Valor"></td>
+      <td class="n"><input type="number" step="0.01" data-num data-bind="dividas.${i}.taxa" value="${num(x.taxa)}" aria-label="Taxa" style="min-width:70px"></td>
+      <td class="n"><input type="number" step="1" min="1" data-num data-bind="dividas.${i}.parcelas" value="${num(x.parcelas)}" aria-label="Parcelas" style="min-width:70px"></td>
+      <td><input type="month" data-bind="dividas.${i}.inicio" value="${x.inicio}" aria-label="Primeira parcela" style="min-width:140px"></td>
+      <td class="n">${brl2.format(f.parcela)}</td><td class="n">${f.pagas}/${num(x.parcelas)}</td><td class="n">${R(f.saldo)}</td>
+      <td>${f.restantes?rotMes(f.fim):`<span class="chip good">Quitada</span>`}</td>
+      <td><button class="icon-btn" data-act="del" data-path="dividas.${i}" aria-label="Remover dívida">✕</button></td></tr>`;}).join("")}</tbody></table></div>
+  <div style="height:14px"></div>
+  <div class="panel"><h3>Simular quitação antecipada</h3><div class="row" style="margin-bottom:12px">
+    <div class="field"><label for="simDiv">Dívida</label><select id="simDiv" data-ui="simDiv">${d.dividas.map((x,i)=>`<option value="${i}" ${i===sel?"selected":""}>${esc(x.nome)}</option>`).join("")}</select></div>
+    <div class="field"><label for="extra">Valor extra para amortizar</label><input id="extra" type="number" step="1000" data-ui="extra" value="${extra}"></div>
+  </div>${sim}</div>`:`<div class="empty">Nenhuma dívida cadastrada. Use “+ Nova dívida” para lançar financiamentos, empréstimos ou parcelamentos.</div>`}`;
+}
+
+function telaEmpresa(){
+  const e=empresaAtual()||{};
+  return `
+  <div class="section-head"><div><h2>Empresa e cenários</h2><p>Dados cadastrais da empresa selecionada e os cenários de planejamento dela.</p></div><button class="btn primary" data-act="novaEmpresa">+ Cadastrar nova empresa</button></div>
+  <div class="grid g2">
+    <div class="panel"><h3>Dados da empresa</h3>${camposEmpresa(e,"ed")}
+      <div class="row" style="margin-top:14px">${S.confirmDel==="empresa"?`<span class="neg" style="font-size:.9rem">Excluir a empresa e todos os cenários dela?</span><button class="btn danger" data-act="excluirEmpresaOk">Sim, excluir</button><button class="btn" data-act="cancelaDel">Cancelar</button>`:`<button class="btn danger" data-act="excluirEmpresa">Excluir empresa</button>`}</div></div>
+    <div class="panel"><h3>Cenário atual</h3>
+      <div class="field" style="margin-bottom:12px"><label for="nomePlano">Nome do cenário</label><input id="nomePlano" data-bind-nome value="${esc(S.nome)}"></div>
+      <div class="row">
+        <button class="btn" data-act="duplicar">Duplicar cenário</button>
+        <button class="btn" data-act="novoVazio">Novo cenário em branco</button>
+        ${S.confirmDel==="plano"?`<button class="btn danger" data-act="excluirPlanoOk">Confirmar exclusão</button><button class="btn" data-act="cancelaDel">Cancelar</button>`:`<button class="btn danger" data-act="excluirPlano">Excluir cenário</button>`}
+      </div>
+      <p class="note">Duplique o cenário base para testar hipóteses (ex.: “otimista” e “pessimista”) sem perder o original. ${esc(S.info)}</p></div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="panel"><h3>Empresas cadastradas (${S.empresas.length})</h3><div class="empresa-list">${S.empresas.map(x=>`<div class="empresa-item ${x.id===S.empresaId?"on":""}"><div><b>${esc(x.nome)}</b><div class="muted" style="font-size:.86rem">${[x.cnpj,x.setor,x.regime,x.cidade].filter(Boolean).map(esc).join(" · ")||"Sem dados complementares"}</div></div>${x.id===S.empresaId?`<span class="chip info">Selecionada</span>`:`<button class="btn small" data-act="irEmpresa" data-id="${x.id}">Abrir</button>`}</div>`).join("")}</div></div>`;
+}
+
+function telaConexao(){
+  return `
+  <div class="section-head"><div><h2>Conexão e backup</h2><p>${ONLINE?"Conectado ao Supabase: empresas e cenários são compartilhados com todos os usuários logados.":"<b>Modo local:</b> os dados ficam só neste navegador. Conecte ao Supabase para usar em vários computadores e com a equipe."}</p></div></div>
+  <div class="grid g2">
+    <div class="panel"><h3>Conexão com o Supabase</h3>
+      <p class="note" style="margin-top:0">1. No Supabase, abra o <b>SQL Editor</b> e rode o script (botão abaixo).<br>2. Em <b>Project Settings → API</b>, copie a URL e a chave <i>anon public</i> e cole aqui.<br>3. Em <b>Authentication → Users</b>, crie os usuários que vão acessar.</p>
+      <div class="formgrid" style="margin-bottom:10px">
+        <div class="field"><label for="cUrl">Project URL</label><input id="cUrl" placeholder="https://xxxx.supabase.co" value="${esc(CFG.SUPABASE_URL||"")}"></div>
+        <div class="field"><label for="cKey">Chave anon public</label><input id="cKey" placeholder="eyJ…" value="${esc(CFG.SUPABASE_ANON_KEY||"")}"></div>
+      </div>
+      <div class="row"><button class="btn primary" data-act="conectar">Salvar e conectar</button>${ONLINE?`<button class="btn" data-act="desconectar">Voltar ao modo local</button>`:""}<button class="btn" data-act="sql">${S.showSql?"Ocultar script SQL":"Ver script SQL"}</button></div>
+      ${S.showSql?`<textarea id="sqlTxt" readonly style="margin-top:10px">${esc(SQL_SCHEMA)}</textarea><div class="row"><button class="btn small" data-act="copiarSql">Copiar script</button><span class="muted" id="sqlMsg"></span></div>`:""}
+      <p class="note" style="margin-bottom:0">A chave anon pode ficar no navegador: o acesso é protegido pelo login e pelas regras de segurança (RLS) do script. Os dados do modo local não são enviados automaticamente; exporte e importe pelo backup.</p></div>
+    <div class="panel"><h3>Backup do cenário</h3>
+      <div class="row" style="margin-bottom:10px"><button class="btn" data-act="exportar">Exportar JSON</button><label class="btn" for="imp">Importar JSON</label><input id="imp" type="file" accept=".json,application/json" hidden></div>
+      ${S.export?`<textarea id="expTxt" readonly>${esc(S.export)}</textarea><div class="row"><button class="btn small" data-act="copiar">Copiar</button><span class="muted" id="copyMsg"></span></div>`:`<p class="muted" style="margin:0">Exporta o cenário atual em JSON. Importar cria um novo cenário na empresa selecionada.</p>`}</div>
+  </div>`;
+}
+
+/* ============================ eventos ============================ */
+function setPath(o,p,v){const k=p.split(".");for(let i=0;i<k.length-1;i++)o=o[k[i]];o[k[k.length-1]]=v;}
+function delPath(o,p){const k=p.split(".");for(let i=0;i<k.length-1;i++)o=o[k[i]];o.splice(+k[k.length-1],1);}
+function lerEmpresa(pref){const g=id=>document.getElementById(pref+id)?.value.trim()||"";return{nome:g("Nome"),cnpj:g("Cnpj"),setor:g("Setor"),regime:g("Regime"),cidade:g("Cidade"),responsavel:g("Resp"),contato:g("Contato")};}
+
+document.addEventListener("change",async e=>{
+  const t=e.target;
+  try{
+    if(t.id==="selEmpresa"){if(t.value==="__nova"){S.tela="novaEmpresa";render();}else{await abrirEmpresa(t.value);}return;}
+    if(t.id==="selPlano"){await abrirPlano(t.value);return;}
+    if(t.id==="imp"&&t.files[0]){const fr=new FileReader();fr.onload=async()=>{try{const j=JSON.parse(fr.result);await criarPlano((j.nome||"Cenário")+" (importado)",normaliza(j.dados||j));}catch(err){avisar("Arquivo inválido: não é um JSON de planejamento.");}};fr.readAsText(t.files[0]);return;}
+    if(t.dataset.emp&&t.id.startsWith("ed")){const patch={[t.dataset.emp]:t.value.trim()};if(patch.nome==="")return avisar("A empresa precisa de um nome.");await store.updateEmpresa(S.empresaId,patch);Object.assign(empresaAtual(),patch);S.saveState="ok";S.saveMsg="Empresa atualizada";render();return;}
+    if(t.dataset.ui){S[t.dataset.ui]=t.value;render();return;}
+    if(t.dataset.bindNome!==undefined){S.nome=t.value.trim()||"Sem nome";agendarSalvar();render();return;}
+    if(t.dataset.bind){let v=t.value;if(t.dataset.num!==undefined)v=num(v);if(t.dataset.bool!==undefined)v=v==="1";if(t.type==="month"&&!v)return;setPath(S.dados,t.dataset.bind,v);agendarSalvar();render();}
+  }catch(err){avisar(err.message||String(err));}
+});
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act,d=S.dados;
+  try{switch(a){
+    case "aba":S.aba=b.dataset.aba;lsSet(LS_KEY+"-aba",S.aba);render();window.scrollTo(0,0);break;
+    case "sair":await sb.auth.signOut();break;
+    case "recarregar":location.reload();break;
+    case "novaEmpresa":S.tela="novaEmpresa";render();break;
+    case "cancelarEmpresa":S.tela="app";render();break;
+    case "irEmpresa":await abrirEmpresa(b.dataset.id);break;
+    case "excluirEmpresa":S.confirmDel="empresa";render();break;
+    case "excluirPlano":if(S.planos.length<=1){avisar("A empresa precisa ter pelo menos um cenário.");break;}S.confirmDel="plano";render();break;
+    case "cancelaDel":S.confirmDel="";render();break;
+    case "excluirEmpresaOk":await store.deleteEmpresa(S.empresaId);S.empresas=S.empresas.filter(x=>x.id!==S.empresaId);S.confirmDel="";
+      if(S.empresas.length)await abrirEmpresa(S.empresas[0].id);else{S.empresaId=null;S.dados=null;S.tela="novaEmpresa";render();}break;
+    case "excluirPlanoOk":await store.deletePlano(S.atualId);S.planos=S.planos.filter(p=>p.id!==S.atualId);await abrirPlano(S.planos[0].id);break;
+    case "addCat":d.categorias.push({id:uid(),tipo:b.dataset.tipo,nome:b.dataset.tipo==="receita"?"Nova receita":"Nova despesa",natureza:"fixa",previsto:0,realizado:0,cresc:0});d.categorias.sort((x,y)=>x.tipo===y.tipo?0:x.tipo==="receita"?-1:1);agendarSalvar();render();break;
+    case "addMeta":d.metas.push({id:uid(),nome:"Nova meta",alvo:50000,atual:0,prazo:addMes(d.mesRef,12),taxaAno:10});agendarSalvar();render();break;
+    case "addDiv":d.dividas.push({id:uid(),nome:"Nova dívida",valor:10000,taxa:1.5,parcelas:12,inicio:d.mesRef});agendarSalvar();render();break;
+    case "del":delPath(d,b.dataset.path);agendarSalvar();render();break;
+    case "duplicar":await salvar();await criarPlano(S.nome+" (cópia)",JSON.parse(JSON.stringify(d)));break;
+    case "novoVazio":await criarPlano("Novo cenário",basico());S.aba="orcamento";render();break;
+    case "conectar":{const url=document.getElementById("cUrl").value.trim(),key=document.getElementById("cKey").value.trim();
+      if(!/^https:\/\/.+/.test(url)||key.length<20){avisar("Informe a URL (https://…supabase.co) e a chave anon.");break;}
+      lsSet(LS_CON,JSON.stringify({SUPABASE_URL:url,SUPABASE_ANON_KEY:key}));location.reload();break;}
+    case "desconectar":try{localStorage.removeItem(LS_CON)}catch(err){}if(window.PLANEJAMENTO_CONFIG?.SUPABASE_URL){avisar("A conexão está fixada no arquivo HTML (bloco CONFIGURAÇÃO).");break;}location.reload();break;
+    case "sql":S.showSql=!S.showSql;render();break;
+    case "copiarSql":case "copiar":{const ta=document.getElementById(a==="copiarSql"?"sqlTxt":"expTxt"),msg=document.getElementById(a==="copiarSql"?"sqlMsg":"copyMsg");
+      try{await navigator.clipboard.writeText(ta.value);msg.textContent="Copiado.";}catch(err){ta.select();msg.textContent="Texto selecionado: use Ctrl+C.";}break;}
+    case "exportar":{S.export=JSON.stringify({empresa:empresaAtual()?.nome,nome:S.nome,exportado_em:new Date().toISOString(),dados:d},null,2);
+      try{const u=URL.createObjectURL(new Blob([S.export],{type:"application/json"})),l=document.createElement("a");l.href=u;l.download=`planejamento-${(empresaAtual()?.nome+"-"+S.nome).normalize("NFD").replace(/[^\w]+/g,"-").toLowerCase()}.json`;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}catch(err){}
+      render();break;}
+    case "csvFluxo":{const f=fluxo(d),csv=[["mes","entradas","despesas","parcelas","aportes_metas","liquido","saldo"],...f.map(m=>[m.ym,...["entradas","saidas","parcelas","metas","liquido","saldo"].map(k=>m[k].toFixed(2).replace(".",","))])].map(l=>l.join(";")).join("\n");
+      try{await navigator.clipboard.writeText(csv);document.getElementById("csvMsg").textContent="CSV copiado: cole no Excel.";}catch(err){document.getElementById("csvMsg").textContent="Não foi possível copiar neste navegador.";}break;}
+  }}catch(err){avisar(err.message||String(err));}
+});
+document.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(e.target.id==="fEmpresa"){
+    const emp=lerEmpresa("ne"),err=document.getElementById("neErr");if(!emp.nome){err.textContent="Informe o nome da empresa.";return;}
+    try{err.textContent="Cadastrando…";const nova=await store.insertEmpresa(emp);S.empresas.push(nova);S.empresas.sort((a,b)=>a.nome.localeCompare(b.nome));
+      await store.insertPlano(nova.id,"Cenário base",document.getElementById("neBasico").checked?basico():vazio());
+      S.aba="orcamento";await abrirEmpresa(nova.id);}catch(x){err.textContent=x.message||String(x);}
+  }
+  if(e.target.id==="fLogin"){
+    const err=document.getElementById("lErr");err.textContent="Entrando…";
+    const{error}=await sb.auth.signInWithPassword({email:document.getElementById("lEmail").value.trim(),password:document.getElementById("lSenha").value});
+    if(error)err.textContent=error.message.includes("Invalid")?"E-mail ou senha incorretos.":error.message;
+  }
+});
+const tip=document.getElementById("tip");
+document.addEventListener("mousemove",e=>{const el=e.target.closest?.("[data-tip]");if(!el){tip.hidden=true;return;}tip.innerHTML=el.dataset.tip;tip.hidden=false;
+  tip.style.left=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=(e.clientY+14+tip.offsetHeight>innerHeight?e.clientY-tip.offsetHeight-10:e.clientY+14)+"px";});
+window.addEventListener("beforeunload",e=>{if(S.saveState==="pending"){salvar();e.preventDefault();e.returnValue="";}});
+
+/* ============================ script do banco (Supabase) ============================ */
+const SQL_SCHEMA=`-- Planejamento Financeiro Empresarial — rode no SQL Editor do Supabase (pode rodar de novo sem problema)
+
+create table if not exists public.empresas (
+  id            uuid primary key default gen_random_uuid(),
+  nome          text not null,
+  cnpj          text, setor text, regime text, cidade text, responsavel text, contato text,
+  criado_em     timestamptz not null default now()
+);
+
+create table if not exists public.planejamentos (
+  id              uuid primary key default gen_random_uuid(),
+  empresa_id      uuid references public.empresas(id) on delete cascade,
+  nome            text not null,
+  dados           jsonb not null default '{}'::jsonb,
+  criado_em       timestamptz not null default now(),
+  atualizado_em   timestamptz not null default now(),
+  atualizado_por  text default (auth.jwt() ->> 'email')
+);
+alter table public.planejamentos add column if not exists empresa_id uuid references public.empresas(id) on delete cascade;
+create index if not exists planejamentos_empresa_idx on public.planejamentos (empresa_id);
+
+create or replace function public.fn_planejamentos_touch() returns trigger language plpgsql as $$
+begin
+  new.atualizado_em := now();
+  new.atualizado_por := coalesce(auth.jwt() ->> 'email', new.atualizado_por);
+  return new;
+end $$;
+drop trigger if exists trg_planejamentos_touch on public.planejamentos;
+create trigger trg_planejamentos_touch before update on public.planejamentos
+  for each row execute function public.fn_planejamentos_touch();
+
+-- Histórico: cada gravação guarda a versão anterior
+create table if not exists public.planejamentos_historico (
+  id               bigint generated always as identity primary key,
+  planejamento_id  uuid not null references public.planejamentos(id) on delete cascade,
+  dados            jsonb not null,
+  salvo_em         timestamptz not null default now(),
+  salvo_por        text
+);
+create or replace function public.fn_planejamentos_historico() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.dados is distinct from new.dados then
+    insert into public.planejamentos_historico (planejamento_id, dados, salvo_por)
+    values (old.id, old.dados, old.atualizado_por);
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_planejamentos_historico on public.planejamentos;
+create trigger trg_planejamentos_historico after update on public.planejamentos
+  for each row execute function public.fn_planejamentos_historico();
+
+-- Segurança: só usuários logados acessam (Authentication > Users)
+alter table public.empresas enable row level security;
+alter table public.planejamentos enable row level security;
+alter table public.planejamentos_historico enable row level security;
+drop policy if exists "logados acessam empresas" on public.empresas;
+drop policy if exists "logados acessam planejamentos" on public.planejamentos;
+drop policy if exists "logados leem historico" on public.planejamentos_historico;
+create policy "logados acessam empresas" on public.empresas for all to authenticated using (true) with check (true);
+create policy "logados acessam planejamentos" on public.planejamentos for all to authenticated using (true) with check (true);
+create policy "logados leem historico" on public.planejamentos_historico for select to authenticated using (true);
+`;
+
+/* ============================ início ============================ */
+{const a=lsGet(LS_KEY+"-aba");if(a&&ABAS.some(x=>x[0]===a))S.aba=a;}
+if(ONLINE){
+  sb.auth.getSession().then(({data})=>{S.user=data.session?.user||null;if(S.user)iniciar();else render();});
+  sb.auth.onAuthStateChange((ev,session)=>{const antes=S.user;S.user=session?.user||null;if(S.user&&!antes)iniciar();if(!S.user){S.dados=null;S.empresas=[];render();}});
+}else iniciar();
+</script>
+</body>
+</html>
