@@ -122,6 +122,18 @@ td input[type=number],td input.money{text-align:right}
 td input::placeholder{color:#C3CAD6}
 td input.name{min-width:220px;font-weight:500}
 .real-set{background:#F3FAF6!important}
+.namecell{display:grid;gap:1px;min-width:230px}
+.namecell input.name{padding:3px 6px}
+.nametags{display:flex;gap:6px;align-items:center;padding:0 6px 2px;flex-wrap:wrap}
+.sub-t{font-size:.7rem;color:var(--muted)}
+td.auto{color:var(--muted);font-style:italic;background:repeating-linear-gradient(135deg,transparent 0 6px,#F7F8FA 6px 12px)}
+.qtd-v{font-size:.68rem;color:var(--muted);text-align:right;padding:0 6px}
+tr.addrow td{padding:3px 10px 8px;border-bottom:1px solid var(--line)} tr.addrow .linkbtn{font-size:.78rem}
+tbody tr.addrow:hover td{background:transparent}
+.grp-h{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:#FAFBFC}
+.gname{font:800 1rem var(--f-display);border:1px solid transparent;background:transparent;border-radius:7px;padding:4px 8px;flex:1;min-width:0}
+.gname:hover{border-color:var(--line-2);background:#fff} .gname:focus{border-color:var(--accent);background:#fff;outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.icon-btn:disabled{opacity:.25;cursor:default}
 .var-bad{color:var(--bad);font-weight:600} .var-good{color:var(--good);font-weight:600}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:7px 13px;font-weight:600;font-size:.84rem;cursor:pointer;white-space:nowrap}
@@ -278,13 +290,43 @@ const GRUPOS=[
   {k:"retirada",    nome:"Distribuição de lucros e retiradas",    sinal:-1, tipo:"financiamento"}
 ];
 const G=Object.fromEntries(GRUPOS.map(g=>[g.k,g]));
-const PRAZOS=[[0,"À vista"],[30,"30 dias"],[60,"60 dias"],[90,"90 dias"]];
+const PRAZOS=[[0,"À vista"],[15,"15 dias"],[30,"30 dias"],[45,"45 dias"],[60,"60 dias"],[90,"90 dias"],[120,"120 dias"]];
+// nome do tipo de conta em linguagem simples (usado no cadastro do plano de contas)
+const ROTULO={receita:"Receita · venda de produto ou serviço",deducao:"Imposto ou dedução sobre vendas",custo:"Custo variável · acompanha as vendas",
+  pessoal:"Despesa fixa · pessoal",operacional:"Despesa fixa · administrativa e ocupação",comercial:"Despesa fixa · comercial e marketing",
+  fin_rec:"Receita financeira",fin_desp:"Despesa financeira",tributos:"Imposto sobre o lucro (IRPJ/CSLL)",investimento:"Investimento · equipamentos, obras",
+  aporte:"Aporte de sócios ou capital",retirada:"Retirada / distribuição de lucros"};
+const CALCS=[["valor","Valor mês a mês"],["pct","% da receita"],["qtd","Quantidade × preço"]];
+const gNome=(d,k)=>(d&&d.nomesGrupos&&d.nomesGrupos[k])||G[k].nome;
 const REGIMES=["","MEI","Simples Nacional","Lucro Presumido","Lucro Real","Outro"];
 const zeros=()=>Array(H).fill(0);
 
 function vazio(inicio=ymHoje){return{versao:3,inicio,mesRef:inicio,saldoInicial:0,saldoMinimo:0,incluirMetas:true,sazonal:Array(12).fill(0),
-  categorias:[],dividas:[],metas:[],projetos:[],sens:{rec:0,desp:0},sim:{inicial:0,aporte:1000,taxaAno:10,anos:5}};}
-function novaCat(grupo,nome,prazo=0){return{id:uid(),grupo,nome,prev:zeros(),real:Array(H).fill(null),prazo};}
+  categorias:[],nomesGrupos:{},dividas:[],metas:[],projetos:[],sens:{rec:0,desp:0},sim:{inicial:0,aporte:1000,taxaAno:10,anos:5}};}
+function novaCat(grupo,nome,prazo=0,extra={}){return{id:uid(),grupo,nome,sub:"",calc:"valor",pct:0,base:"receita",preco:0,qtd:zeros(),prev:zeros(),real:Array(H).fill(null),prazo,...extra};}
+// recalcula o previsto das contas em % da receita e quantidade × preço
+function recalcula(d){
+  const cs=d.categorias,porId=Object.fromEntries(cs.map(c=>[c.id,c]));
+  for(const c of cs)if(c.calc==="qtd")c.prev=c.prev.map((_,k)=>Math.round(num(c.qtd[k])*num(c.preco)*100)/100);
+  const rb=[...Array(H)].map((_,k)=>sum(cs.filter(c=>c.grupo==="receita"&&c.calc!=="pct").map(c=>num(c.prev[k]))));
+  for(const c of cs)if(c.calc==="pct"){const b=c.base&&c.base!=="receita"&&porId[c.base]&&porId[c.base].calc!=="pct"?porId[c.base].prev:rb;c.prev=c.prev.map((_,k)=>Math.round(num(b[k])*num(c.pct))/100);}
+  return d;
+}
+// modelos de plano de contas por setor: [grupo, nome, cálculo, parâmetro, subgrupo]
+const MODELOS={
+  comercio:{nome:"Comércio / varejo",contas:[["receita","Venda de mercadorias","valor",0,"Vendas"],["deducao","Simples Nacional","pct",6,"Impostos"],["custo","Custo das mercadorias vendidas (CMV)","pct",45,"Mercadorias"],["custo","Comissões de vendedores","pct",3,"Comissões"],["custo","Taxas de cartão","pct",2.5,"Meios de pagamento"],["custo","Fretes e embalagens","pct",1.5,"Logística"],["pessoal","Salários e encargos","valor",0,"Equipe"],["pessoal","Pró-labore","valor",0,"Sócios"],["operacional","Aluguel","valor",0,"Ocupação"],["operacional","Energia elétrica","valor",0,"Utilidades"],["operacional","Água e esgoto","valor",0,"Utilidades"],["operacional","Internet e telefone","valor",0,"Utilidades"],["operacional","Contabilidade","valor",0,"Serviços de terceiros"],["operacional","Sistemas e software","valor",0,"Tecnologia"],["comercial","Marketing e anúncios","valor",0,"Marketing"],["fin_desp","Tarifas bancárias","valor",0,"Bancos"]]},
+  servicos:{nome:"Prestação de serviços",contas:[["receita","Serviços prestados","valor",0,"Serviços"],["receita","Contratos recorrentes","valor",0,"Serviços"],["deducao","ISS / Simples Nacional","pct",6,"Impostos"],["custo","Materiais aplicados nos serviços","pct",8,"Materiais"],["custo","Comissões e repasses","pct",10,"Comissões"],["custo","Taxas de cartão","pct",2,"Meios de pagamento"],["pessoal","Salários e encargos","valor",0,"Equipe"],["pessoal","Pró-labore","valor",0,"Sócios"],["operacional","Aluguel","valor",0,"Ocupação"],["operacional","Energia elétrica","valor",0,"Utilidades"],["operacional","Internet e telefone","valor",0,"Utilidades"],["operacional","Contabilidade","valor",0,"Serviços de terceiros"],["operacional","Sistemas e software","valor",0,"Tecnologia"],["comercial","Marketing digital","valor",0,"Marketing"],["fin_desp","Tarifas bancárias","valor",0,"Bancos"]]},
+  industria:{nome:"Indústria",contas:[["receita","Venda de produtos fabricados","valor",0,"Vendas"],["deducao","Impostos sobre vendas (ICMS, IPI, PIS, COFINS)","pct",12,"Impostos"],["custo","Matéria-prima","pct",35,"Produção"],["custo","Embalagens","pct",3,"Produção"],["custo","Energia da produção","pct",4,"Produção"],["custo","Frete sobre vendas","pct",2,"Logística"],["custo","Comissões de representantes","pct",3,"Comissões"],["pessoal","Mão de obra da produção","valor",0,"Produção"],["pessoal","Salários administrativos","valor",0,"Administrativo"],["pessoal","Pró-labore","valor",0,"Sócios"],["operacional","Aluguel do galpão","valor",0,"Ocupação"],["operacional","Manutenção de máquinas","valor",0,"Manutenção"],["operacional","Contabilidade","valor",0,"Serviços de terceiros"],["comercial","Feiras e marketing","valor",0,"Marketing"],["fin_desp","Tarifas bancárias","valor",0,"Bancos"],["investimento","Máquinas e equipamentos","valor",0,"Investimentos"]]},
+  alimentacao:{nome:"Restaurante / alimentação",contas:[["receita","Vendas no salão","valor",0,"Vendas"],["receita","Delivery","valor",0,"Vendas"],["deducao","Simples Nacional","pct",8,"Impostos"],["custo","Alimentos e bebidas (insumos)","pct",32,"Insumos"],["custo","Taxa dos aplicativos de entrega","pct",20,"Delivery","Delivery"],["custo","Embalagens","pct",3,"Insumos"],["custo","Taxas de cartão","pct",2.5,"Meios de pagamento"],["pessoal","Equipe de cozinha","valor",0,"Equipe"],["pessoal","Equipe de salão","valor",0,"Equipe"],["pessoal","Pró-labore","valor",0,"Sócios"],["operacional","Aluguel","valor",0,"Ocupação"],["operacional","Energia elétrica","valor",0,"Utilidades"],["operacional","Gás","valor",0,"Utilidades"],["operacional","Água","valor",0,"Utilidades"],["operacional","Contabilidade","valor",0,"Serviços de terceiros"],["comercial","Marketing e redes sociais","valor",0,"Marketing"]]},
+  saude:{nome:"Clínica / saúde",contas:[["receita","Consultas","qtd",0,"Atendimentos"],["receita","Procedimentos","valor",0,"Atendimentos"],["receita","Exames","valor",0,"Exames"],["receita","Venda de produtos","valor",0,"Produtos"],["deducao","Simples Nacional","pct",6,"Impostos"],["custo","Materiais e medicamentos","pct",10,"Insumos"],["custo","Repasse a profissionais","pct",30,"Repasses"],["custo","Laboratório terceirizado","pct",15,"Exames","Exames"],["custo","Taxas de cartão","pct",2.5,"Meios de pagamento"],["pessoal","Salários e encargos","valor",0,"Equipe"],["pessoal","Pró-labore","valor",0,"Sócios"],["operacional","Aluguel","valor",0,"Ocupação"],["operacional","Energia elétrica","valor",0,"Utilidades"],["operacional","Sistemas e prontuário","valor",0,"Tecnologia"],["operacional","Contabilidade","valor",0,"Serviços de terceiros"],["comercial","Marketing","valor",0,"Marketing"]]}
+};
+function aplicaModelo(d,chave){
+  const M=MODELOS[chave];if(!M)return 0;let n=0;const existe=nm=>d.categorias.some(c=>c.nome.trim().toLowerCase()===nm.toLowerCase());
+  for(const[g,nome,calc,par,sub,baseNome]of M.contas){if(existe(nome))continue;
+    const c=novaCat(g,nome,0,{calc,sub:sub||""});if(calc==="pct"){c.pct=par;if(baseNome){const b=d.categorias.find(x=>x.nome===baseNome);if(b)c.base=b.id;}}
+    const pos=d.categorias.map(x=>x.grupo).lastIndexOf(g);d.categorias.splice(pos<0?d.categorias.length:pos+1,0,c);n++;}
+  recalcula(d);return n;
+}
 function basico(){
   const d=vazio();
   d.categorias=[
@@ -303,7 +345,7 @@ function migra(d){
   if(!d) return vazio();
   if(d.versao===3){
     const v=vazio(d.inicio||ymHoje); d={...v,...d}; d.sens={...v.sens,...(d.sens||{})}; d.sim={...v.sim,...(d.sim||{})};
-    d.categorias=(d.categorias||[]).map(c=>({...novaCat(c.grupo||"operacional",c.nome),...c,prev:fix(c.prev,0),real:fix(c.real,null)}));
+    d.categorias=(d.categorias||[]).map(c=>({...novaCat(c.grupo||"operacional",c.nome),...c,prev:fix(c.prev,0),real:fix(c.real,null),qtd:fix(c.qtd,0)}));d.nomesGrupos=d.nomesGrupos||{};recalcula(d);
     d.dividas=(d.dividas||[]).map(x=>({sistema:"price",carencia:0,captacao:"",...x}));
     d.projetos=d.projetos||[]; if(!Array.isArray(d.sazonal)||d.sazonal.length!==12)d.sazonal=Array(12).fill(0);
     return d;
@@ -352,7 +394,7 @@ function projeta(d,sens=d.sens||{rec:0,desp:0}){
   const ms=mesesDo(d),comp={},cash={};
   for(const g of GRUPOS){comp[g.k]=zeros();cash[g.k]=zeros();}
   for(const c of d.categorias){
-    const g=G[c.grupo]?c.grupo:"operacional",m=multiplicador(g,sens),p=Math.round(num(c.prazo)/30);
+    const g=G[c.grupo]?c.grupo:"operacional",m=c.calc==="pct"?1+num(sens.rec)/100:multiplicador(g,sens),p=Math.round(num(c.prazo)/30);
     for(let k=0;k<H;k++){
       comp[g][k]+=num(c.prev[k])*m;
       const src=k-p; cash[g][k]+=num(c.prev[src>=0?src:0])*m; // antes do horizonte, assume o nível do 1º mês
@@ -887,7 +929,7 @@ function telaPainel(){
   if(!al.length)al.push(["good","Tudo dentro do planejado","Nenhum ponto de atenção no momento."]);
   const rot={good:"OK",bad:"Crítico",warn:"Atenção",info:"Início"};
   // composição das despesas no ano
-  const desp=["deducao","custo","pessoal","operacional","comercial","fin_desp","tributos"].map(g=>({nome:G[g].nome,valor:g==="fin_desp"?sum(P.finDesp):sum(P.comp[g])})).filter(x=>x.valor>0).sort((a,b)=>b.valor-a.valor);
+  const desp=["deducao","custo","pessoal","operacional","comercial","fin_desp","tributos"].map(g=>({nome:gNome(d,g),valor:g==="fin_desp"?sum(P.finDesp):sum(P.comp[g])})).filter(x=>x.valor>0).sort((a,b)=>b.valor-a.valor);
   const totDesp=sum(desp.map(x=>x.valor));desp.forEach(x=>x.sub=pct(x.valor/totDesp));
   // previsto x realizado do mês (maiores categorias)
   const pxr=d.categorias.filter(c=>num(c.prev[k])||num(c.real[k])).map(c=>({nome:c.nome,valor:num(c.real[k]),ref:num(c.prev[k]),g:c.grupo,
@@ -934,54 +976,114 @@ const DRE_ORDEM=[
   ["h","Itens de caixa fora da DRE"],["g","investimento"],["g","aporte"],["g","retirada"]
 ];
 function telaPlan(){
-  const d=S.dados,P=projeta(d,{rec:0,desp:0}),ms=P.ms,modo=U.planModo||"prev",k=idxMes(d,d.mesRef);
-  const seg=`<div class="seg" role="group" aria-label="Visão">${[["prev","Previsto"],["real","Realizado"],["comp","Previsto × realizado"]].map(([v,t])=>`<button data-act="planModo" data-v="${v}" aria-pressed="${modo===v}">${t}</button>`).join("")}</div>`;
+  const d=S.dados,P=projeta(d,{rec:0,desp:0}),ms=P.ms,modo=U.planModo||(d.categorias.length?"prev":"contas"),k=idxMes(d,d.mesRef);
+  const seg=`<div class="seg" role="group" aria-label="Visão">${[["contas","Plano de contas"],["prev","Previsto"],["real","Realizado"],["comp","Previsto × realizado"]].map(([v,t])=>`<button data-act="planModo" data-v="${v}" aria-pressed="${modo===v}">${t}</button>`).join("")}</div>`;
   const barra=`<div class="toolbar">${seg}<div class="row">
-    <div class="field"><label for="inicioPlan">1º mês do planejamento</label><input id="inicioPlan" type="month" value="${d.inicio}"></div>
-    <button class="btn" data-act="rolar" title="Avança um mês: o primeiro sai e um novo entra no fim, repetindo a tendência">Rolar previsão +1 mês</button>
+    ${modo==="contas"?"":`<div class="field"><label for="inicioPlan">1º mês do planejamento</label><input id="inicioPlan" type="month" value="${d.inicio}"></div>
+    <button class="btn" data-act="rolar" title="Avança um mês: o primeiro sai e um novo entra no fim, repetindo o último valor">Rolar previsão +1 mês</button>`}
+    <button class="btn" data-act="novaConta2">+ Nova conta</button>
     <button class="btn" data-act="copiarDRE">Copiar tabela</button><span class="note" id="copMsg"></span></div></div>`;
-  if(modo==="comp")return barra+telaComparativo(d,P,k);
+  const form=U.ncAberto?formNovaConta(d):"";
+  if(modo==="contas")return barra+form+telaContas(d,P);
+  if(modo==="comp")return barra+form+telaComparativo(d,P,k);
   const campo=modo==="real"?"real":"prev";
   const cats=d.categorias.map((c,i)=>[c,i]);
   const linhaTot=(nome,arr,cls)=>`<tr class="${cls}"><td class="sticky">${nome}</td><td></td>${arr.map(v=>`<td class="n ${v<0?"neg":""}">${R(v)}</td>`).join("")}<td class="n ${sum(arr)<0?"neg":""}">${R(sum(arr))}</td><td></td></tr>`;
   const realDe=g=>[...Array(H)].map((_,m)=>sum(d.categorias.filter(c=>c.grupo===g).map(c=>num(c.real[m]))));
-  const RV=modo==="real"?(()=>{const o={};for(let m=0;m<H;m++){const r=dreReal(d,m);for(const key of ["rl","mc","ebitda","lair","ll"]){(o[key]=o[key]||[]).push(r[key]);}}o.juros=P.juros;return o;})():null;
+  const RV=modo==="real"?(()=>{const o={};for(let m=0;m<H;m++){const r=dreReal(d,m);for(const key of ["rl","mc","ebitda","lair","ll"]){(o[key]=o[key]||[]).push(r[key]);}}return o;})():null;
+  const nomes=Object.fromEntries(d.categorias.map(c=>[c.id,c.nome]));
   let body="";
   for(const it of DRE_ORDEM){
-    if(it[0]==="h"){body+=`<tr class="grp"><td class="sticky" colspan="1">${it[1]}</td><td colspan="${H+3}"></td></tr>`;continue;}
+    if(it[0]==="h"){body+=`<tr class="grp"><td class="sticky">${it[1]}</td><td colspan="${H+3}"></td></tr>`;continue;}
     if(it[0]==="t"){body+=linhaTot(it[1],RV?RV[it[2]]:P[it[2]],"sub");continue;}
     if(it[0]==="j"){if(sum(P.juros))body+=`<tr><td class="sticky muted">Juros de dívidas (automático)</td><td></td>${P.juros.map(v=>`<td class="n muted">${R(v)}</td>`).join("")}<td class="n muted">${R(sum(P.juros))}</td><td></td></tr>`;continue;}
     const g=it[1],gc=cats.filter(([c])=>c.grupo===g),tot=modo==="real"?realDe(g):P.comp[g];
-    body+=`<tr class="grp"><td class="sticky">${G[g].sinal<0&&!["investimento","retirada"].includes(g)?"(−) ":""}${G[g].nome}</td><td></td>${tot.map(v=>`<td class="n">${v?R(v):""}</td>`).join("")}<td class="n">${R(sum(tot))}</td><td><button class="icon-btn edit" data-act="addCat" data-g="${g}" title="Adicionar categoria" aria-label="Adicionar categoria em ${G[g].nome}">＋</button></td></tr>`;
+    body+=`<tr class="grp"><td class="sticky">${G[g].sinal<0&&!["investimento","retirada"].includes(g)?"(−) ":""}${esc(gNome(d,g))}</td><td></td>${tot.map(v=>`<td class="n">${v?R(v):""}</td>`).join("")}<td class="n">${R(sum(tot))}</td><td></td></tr>`;
     for(const[c,i]of gc){
-      body+=`<tr><td class="sticky cell"><input class="name" id="cn_${c.id}" data-cat="${i}" data-f="nome" value="${esc(c.nome)}" aria-label="Nome da categoria"></td>
-        <td class="cell"><select id="cp_${c.id}" data-cat="${i}" data-f="prazo" aria-label="Prazo de recebimento/pagamento" style="min-width:92px">${PRAZOS.map(([v,t])=>`<option value="${v}" ${num(c.prazo)===v?"selected":""}>${t}</option>`).join("")}</select></td>
-        ${[...Array(H)].map((_,m)=>{const v=c[campo][m];return`<td class="cell ${campo==="real"&&v!=null?"real-set":""}"><input class="money" inputmode="decimal" id="c_${c.id}_${campo}_${m}" data-cat="${i}" data-f="${campo}" data-m="${m}" value="${fmtIn(v)}" placeholder="${campo==="real"?fmtIn(c.prev[m])||"0":"0"}" aria-label="${esc(c.nome)} ${rotMes(ms[m])}"></td>`;}).join("")}
+      const auto=campo==="prev"&&c.calc==="pct",qt=campo==="prev"&&c.calc==="qtd";
+      const tag=c.calc==="pct"?`<span class="chip info" title="Calculada automaticamente">${nf1.format(num(c.pct))}% de ${c.base&&c.base!=="receita"?esc(nomes[c.base]||"receita"):"receita"}</span>`:c.calc==="qtd"?`<span class="chip plain">qtd × ${R2(num(c.preco))}</span>`:"";
+      body+=`<tr><td class="sticky cell"><div class="namecell"><input class="name" id="cn_${c.id}" data-cat="${i}" data-f="nome" value="${esc(c.nome)}" aria-label="Nome da conta" title="Clique para renomear">${c.sub||tag?`<div class="nametags">${c.sub?`<span class="sub-t">${esc(c.sub)}</span>`:""}${tag}</div>`:""}</div></td>
+        <td class="cell"><select id="cp_${c.id}" data-cat="${i}" data-f="prazo" aria-label="Prazo de recebimento ou pagamento" style="min-width:92px">${PRAZOS.map(([v,t])=>`<option value="${v}" ${num(c.prazo)===v?"selected":""}>${t}</option>`).join("")}</select></td>
+        ${[...Array(H)].map((_,m)=>{
+          if(auto)return`<td class="n auto" title="Calculado: ${nf1.format(num(c.pct))}% da base">${c.prev[m]?fmtIn(c.prev[m]):""}</td>`;
+          if(qt)return`<td class="cell"><input class="money" inputmode="decimal" id="c_${c.id}_qtd_${m}" data-cat="${i}" data-f="qtd" data-m="${m}" value="${fmtIn(c.qtd[m])}" placeholder="qtd" aria-label="Quantidade ${esc(c.nome)} ${rotMes(ms[m])}"><div class="qtd-v">${c.prev[m]?R(c.prev[m]):""}</div></td>`;
+          const v=c[campo][m];return`<td class="cell ${campo==="real"&&v!=null?"real-set":""}"><input class="money" inputmode="decimal" id="c_${c.id}_${campo}_${m}" data-cat="${i}" data-f="${campo}" data-m="${m}" value="${fmtIn(v)}" placeholder="${campo==="real"?fmtIn(c.prev[m])||"0":"0"}" aria-label="${esc(c.nome)} ${rotMes(ms[m])}"></td>`;}).join("")}
         <td class="n"><b>${R(sum(c[campo].map(num)))}</b></td>
         <td style="white-space:nowrap"><button class="icon-btn edit" data-act="fill" data-id="${c.id}" title="Preencher, copiar, mover ou excluir" aria-label="Opções de ${esc(c.nome)}">⋯</button></td></tr>`;
-      if(U.fill===c.id)body+=`<tr><td class="sticky" colspan="1" style="background:var(--accent-soft)"></td><td colspan="${H+3}" style="background:var(--accent-soft);white-space:normal">${barraFill(c,i,d)}</td></tr>`;
+      if(U.fill===c.id)body+=`<tr><td class="sticky" style="background:var(--accent-soft)"></td><td colspan="${H+3}" style="background:var(--accent-soft);white-space:normal">${barraFill(c,i,d)}</td></tr>`;
     }
+    body+=`<tr class="addrow"><td class="sticky"><button class="linkbtn" data-act="addCat" data-g="${g}">+ Adicionar conta em ${esc(gNome(d,g))}</button></td><td colspan="${H+3}"></td></tr>`;
   }
-  return barra+`
+  return barra+form+`
   <div class="tbl-wrap"><table>
-    <thead><tr><th class="sticky">Categoria · ${modo==="real"?"realizado":"previsto"}</th><th>Prazo</th>${ms.map(m=>`<th class="n ${m===d.mesRef?"":"" }">${rotMes(m)}${m===d.mesRef?" •":""}</th>`).join("")}<th class="n">Total</th><th></th></tr></thead>
+    <thead><tr><th class="sticky">Conta · ${modo==="real"?"realizado":"previsto"}</th><th>Prazo</th>${ms.map(m=>`<th class="n">${rotMes(m)}${m===d.mesRef?" •":""}</th>`).join("")}<th class="n">Total</th><th></th></tr></thead>
     <tbody>${body}</tbody></table></div>
-  <p class="note" style="margin:0">${modo==="real"?"Células verdes têm valor realizado lançado; em branco, mostra o previsto como referência. Lançamentos das contas bancárias podem preencher o realizado automaticamente.":"Digite valores mensais ou use ⋯ para preencher a linha com valor base, crescimento e sazonalidade. O prazo desloca o valor no fluxo de caixa (regime de caixa) sem mudar a DRE (competência)."}</p>
-  ${panel("Sazonalidade padrão",`<div class="formgrid" style="grid-template-columns:repeat(auto-fill,minmax(80px,1fr))">${MESES.map((m,i)=>`<div class="field"><label for="saz${i}">${m}</label><input id="saz${i}" type="number" step="1" data-bind="sazonal.${i}" value="${num(d.sazonal[i])}"></div>`).join("")}</div>`,{sub:"Ajuste em % por mês do calendário, usado pelo preenchimento automático com a opção de sazonalidade"})}`;
+  <p class="note" style="margin:0">${modo==="real"?"Células verdes têm valor realizado lançado; em branco, aparece o previsto como referência. Lançamentos das contas bancárias podem preencher o realizado automaticamente.":"Clique no nome para renomear. Contas em % da receita são calculadas sozinhas; contas por quantidade recebem a quantidade de cada mês. Use ⋯ para preencher a linha com valor base, crescimento e sazonalidade. O prazo desloca o valor no fluxo de caixa sem mudar a DRE."}</p>
+  ${panel("Sazonalidade padrão",`<div class="formgrid" style="grid-template-columns:repeat(auto-fill,minmax(80px,1fr))">${MESES.map((m,i)=>`<div class="field"><label for="saz${i}">${m}</label><input id="saz${i}" type="number" step="1" data-bind="sazonal.${i}" data-num value="${num(d.sazonal[i])}"></div>`).join("")}</div>`,{sub:"Ajuste em % por mês do calendário, usado pelo preenchimento automático com a opção de sazonalidade"})}`;
 }
 function barraFill(c,i,d){
-  const ms=mesesDo(d);
-  return`<div class="fillbar">
-    <div class="field"><label for="fBase">Valor base</label><input id="fBase" inputmode="decimal" value="${fmtIn(c.prev[0])}" style="width:120px"></div>
+  const ms=mesesDo(d),q=c.calc==="qtd";
+  const fillPart=c.calc==="pct"?`<span class="note" style="padding-bottom:8px">Esta conta é calculada como ${nf1.format(num(c.pct))}% da receita. Para mudar, use o Plano de contas.</span>`:`
+    <div class="field"><label for="fBase">${q?"Quantidade base":"Valor base"}</label><input id="fBase" inputmode="decimal" value="${fmtIn(q?c.qtd[0]:c.prev[0])}" style="width:120px"></div>
     <div class="field"><label for="fCresc">Crescimento % a.m.</label><input id="fCresc" type="number" step="0.1" value="0" style="width:100px"></div>
     <div class="field"><label for="fDe">A partir de</label><select id="fDe">${ms.map((m,k)=>`<option value="${k}">${rotMes(m)}</option>`).join("")}</select></div>
     <label class="check" style="padding-bottom:8px"><input type="checkbox" id="fSaz"> aplicar sazonalidade</label>
-    <button class="btn primary small" data-act="fillAplica" data-i="${i}">Preencher previsto</button>
+    <button class="btn primary small" data-act="fillAplica" data-i="${i}">Preencher previsto</button>`;
+  return`<div class="fillbar">${fillPart}
     <button class="btn small" data-act="fillReal" data-i="${i}" title="Copia o previsto para o realizado dos meses até o mês de análise que ainda estão vazios">Copiar previsto → realizado</button>
-    <div class="field"><label for="fGrupo">Grupo</label><select id="fGrupo" data-i="${i}">${GRUPOS.map(g=>`<option value="${g.k}" ${g.k===c.grupo?"selected":""}>${g.nome}</option>`).join("")}</select></div>
+    <div class="field"><label for="fGrupo">Tipo da conta</label><select id="fGrupo" data-i="${i}">${GRUPOS.map(g=>`<option value="${g.k}" ${g.k===c.grupo?"selected":""}>${ROTULO[g.k]}</option>`).join("")}</select></div>
     <button class="btn small" data-act="fillZera" data-i="${i}">Zerar linha</button>
-    <button class="btn small danger" data-act="delCat" data-i="${i}">Excluir categoria</button>
+    <button class="btn small danger" data-act="delCat" data-i="${i}">Excluir conta</button>
     <button class="btn small ghost" data-act="fill" data-id="">Fechar</button></div>`;
+}
+/* ---------- plano de contas (cadastro livre) ---------- */
+function opcoesBase(d,sel,excluiId){
+  return`<option value="receita" ${!sel||sel==="receita"?"selected":""}>Receita total</option>`+d.categorias.filter(c=>c.grupo==="receita"&&c.calc!=="pct"&&c.id!==excluiId).map(c=>`<option value="${c.id}" ${sel===c.id?"selected":""}>Receita de ${esc(c.nome)}</option>`).join("");
+}
+function formNovaConta(d){
+  const g=U.ncGrupo||"receita",calc=U.ncCalc||"valor";
+  const subs=[...new Set(d.categorias.map(c=>c.sub).filter(Boolean))];
+  return panel("Nova conta",`<div class="formgrid">
+      <div class="field span2"><label for="ncNome">Nome da conta *</label><input id="ncNome" placeholder="Ex.: Venda de bolos, Consultoria, Energia elétrica…"></div>
+      <div class="field span2"><label for="ncGrupo">Tipo da conta</label><select id="ncGrupo">${GRUPOS.map(x=>`<option value="${x.k}" ${x.k===g?"selected":""}>${ROTULO[x.k]}</option>`).join("")}</select></div>
+      <div class="field"><label for="ncSub">Subgrupo (opcional)</label><input id="ncSub" list="listaSubs" placeholder="Ex.: Utilidades, Produtos"><datalist id="listaSubs">${subs.map(s=>`<option value="${esc(s)}">`).join("")}</datalist></div>
+      <div class="field"><label for="ncCalc">Como calcular</label><select id="ncCalc">${CALCS.map(([v,t])=>`<option value="${v}" ${v===calc?"selected":""}>${t}</option>`).join("")}</select></div>
+      <div class="field" data-nc="valor" ${calc==="valor"?"":"hidden"}><label for="ncValor">Valor mensal (R$)</label><input id="ncValor" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field" data-nc="pct" ${calc==="pct"?"":"hidden"}><label for="ncPct">Percentual (%)</label><input id="ncPct" inputmode="decimal" placeholder="Ex.: 6"></div>
+      <div class="field" data-nc="pct" ${calc==="pct"?"":"hidden"}><label for="ncBase">Sobre</label><select id="ncBase">${opcoesBase(d)}</select></div>
+      <div class="field" data-nc="qtd" ${calc==="qtd"?"":"hidden"}><label for="ncPreco">Preço unitário (R$)</label><input id="ncPreco" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field" data-nc="qtd" ${calc==="qtd"?"":"hidden"}><label for="ncQtd">Quantidade por mês</label><input id="ncQtd" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label for="ncPrazo">Prazo de recebimento/pagamento</label><select id="ncPrazo">${PRAZOS.map(([v,t])=>`<option value="${v}">${t}</option>`).join("")}</select></div>
+    </div><div class="row c" style="margin-top:12px"><button class="btn primary" data-act="ncSalva">Adicionar conta</button><button class="btn" data-act="ncFecha">Fechar</button><span class="err" id="ncErr"></span></div>
+    <p class="note" style="margin-bottom:0">“% da receita” serve para impostos, comissões, taxas de cartão e custos que acompanham as vendas. “Quantidade × preço” serve para produtos e serviços vendidos por unidade.</p>`,{id:"formNC",sub:"Crie as contas com os nomes que a empresa usa"});
+}
+function telaContas(d,P){
+  const subs=[...new Set(d.categorias.map(c=>c.sub).filter(Boolean))];
+  const grupos=GRUPOS.map(g=>{
+    const cs=d.categorias.map((c,i)=>[c,i]).filter(([c])=>c.grupo===g.k),tot=sum(P.comp[g.k]);
+    const linhas=cs.map(([c,i],pos)=>`<tr>
+      <td style="white-space:nowrap"><button class="icon-btn edit" data-act="mover" data-i="${i}" data-dir="-1" ${pos===0?"disabled":""} aria-label="Subir">↑</button><button class="icon-btn edit" data-act="mover" data-i="${i}" data-dir="1" ${pos===cs.length-1?"disabled":""} aria-label="Descer">↓</button></td>
+      <td class="cell"><input class="name" id="pn_${c.id}" data-cf="nome" data-i="${i}" value="${esc(c.nome)}" aria-label="Nome da conta"></td>
+      <td class="cell"><input id="ps_${c.id}" data-cf="sub" data-i="${i}" list="listaSubs2" value="${esc(c.sub)}" placeholder="—" style="min-width:130px" aria-label="Subgrupo"></td>
+      <td class="cell"><select id="pg_${c.id}" data-cf="grupo" data-i="${i}" aria-label="Tipo da conta" style="min-width:180px">${GRUPOS.map(x=>`<option value="${x.k}" ${x.k===c.grupo?"selected":""}>${ROTULO[x.k]}</option>`).join("")}</select></td>
+      <td class="cell"><select id="pc_${c.id}" data-cf="calc" data-i="${i}" aria-label="Como calcular" style="min-width:140px">${CALCS.map(([v,t])=>`<option value="${v}" ${v===(c.calc||"valor")?"selected":""}>${t}</option>`).join("")}</select></td>
+      <td class="cell" style="min-width:250px">${c.calc==="pct"?`<div class="row c" style="gap:6px;flex-wrap:nowrap"><input id="pp_${c.id}" data-cf="pct" data-i="${i}" inputmode="decimal" value="${fmtIn(c.pct)}" style="width:70px;min-width:70px" aria-label="Percentual"><span class="muted">% de</span><select id="pb_${c.id}" data-cf="base" data-i="${i}" aria-label="Base" style="min-width:140px">${opcoesBase(d,c.base,c.id)}</select></div>`
+        :c.calc==="qtd"?`<div class="row c" style="gap:6px;flex-wrap:nowrap"><span class="muted">R$</span><input id="pr_${c.id}" data-cf="preco" data-i="${i}" inputmode="decimal" value="${fmtIn(c.preco)}" style="width:90px;min-width:90px" aria-label="Preço unitário"><span class="muted">× qtd</span><input id="pq_${c.id}" data-cf="qtdTodos" data-i="${i}" inputmode="decimal" placeholder="${fmtIn(c.qtd[0])||"por mês"}" style="width:80px;min-width:80px" aria-label="Quantidade em todos os meses" title="Preenche a mesma quantidade em todos os meses"></div>`
+        :`<div class="row c" style="gap:6px;flex-wrap:nowrap"><span class="muted">R$</span><input id="pv_${c.id}" data-cf="valorTodos" data-i="${i}" inputmode="decimal" placeholder="${fmtIn(c.prev[0])||"valor mensal"}" style="width:110px;min-width:110px" aria-label="Valor mensal em todos os meses" title="Preenche o mesmo valor em todos os meses"><span class="note">mensal</span></div>`}</td>
+      <td class="cell"><select id="pz_${c.id}" data-cf="prazo" data-i="${i}" aria-label="Prazo" style="min-width:90px">${PRAZOS.map(([v,t])=>`<option value="${v}" ${num(c.prazo)===v?"selected":""}>${t}</option>`).join("")}</select></td>
+      <td class="n">${R(sum(c.prev))}</td>
+      <td style="white-space:nowrap"><button class="icon-btn edit" data-act="dupCat" data-i="${i}" title="Duplicar" aria-label="Duplicar">⧉</button><button class="icon-btn" data-act="delCat2" data-i="${i}" aria-label="Excluir">✕</button></td></tr>`).join("");
+    return`<section class="panel" style="padding:0;overflow:hidden">
+      <div class="grp-h"><div class="row c" style="flex:1;min-width:240px;gap:8px"><input class="gname" id="gn_${g.k}" data-gname="${g.k}" value="${esc(gNome(d,g.k))}" aria-label="Nome do grupo" title="Clique para renomear o grupo">${d.nomesGrupos?.[g.k]?`<button class="linkbtn" data-act="gReset" data-g="${g.k}" style="font-size:.76rem">restaurar nome</button>`:""}</div>
+        <span class="chip plain">${ROTULO[g.k]}</span><span class="muted" style="font-size:.82rem">${cs.length} conta(s) · ${R(tot)} em 12 meses</span><button class="btn small" data-act="addCat" data-g="${g.k}">+ Conta</button></div>
+      ${cs.length?`<div class="tbl-wrap" style="border:0;border-radius:0;box-shadow:none"><table><thead><tr><th style="width:60px">Ordem</th><th>Nome da conta</th><th>Subgrupo</th><th>Tipo</th><th>Como calcular</th><th>Parâmetro</th><th>Prazo</th><th class="n">Previsto 12m</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`:`<p class="muted" style="margin:0;padding:0 18px 16px">Nenhuma conta neste grupo.</p>`}</section>`;
+  }).join("");
+  return`
+  ${panel("Modelos por setor",`<div class="row"><div class="field" style="min-width:240px"><label for="modeloSel">Setor</label><select id="modeloSel">${Object.entries(MODELOS).map(([k,m])=>`<option value="${k}">${m.nome}</option>`).join("")}</select></div><button class="btn" data-act="aplicaModelo">Adicionar contas do modelo</button><span class="note" id="modMsg"></span></div>
+    <p class="note" style="margin-bottom:0">Acrescenta contas sugeridas para o setor, com percentuais típicos que você pode ajustar. Contas com o mesmo nome não são duplicadas; nada do que já existe é apagado.</p>`,{sub:"Ponto de partida rápido: depois renomeie, ajuste ou exclua o que quiser"})}
+  <datalist id="listaSubs2">${subs.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
+  ${grupos}
+  <p class="note" style="margin:0">Tudo aqui é editável: nomes dos grupos e das contas, subgrupos, tipo, forma de cálculo e prazo. O tipo define onde a conta entra na DRE e se ela é fixa ou acompanha as vendas. Os valores mês a mês ficam na visão “Previsto”.</p>`;
 }
 function telaComparativo(d,P,k){
   const R_=dreReal(d,k);
@@ -993,7 +1095,7 @@ function telaComparativo(d,P,k){
     const g=it[1],cs=d.categorias.filter(c=>c.grupo===g);if(!cs.length)continue;
     const bom=v=>G[g].sinal>0?v>=0:v<=0;
     const pT=sum(cs.map(c=>num(c.prev[k]))),rT=sum(cs.map(c=>num(c.real[k])));
-    linhas.push(`<tr class="grp"><td>${G[g].nome}</td><td class="n">${R(pT)}</td><td class="n">${R(rT)}</td><td class="n ${bom(rT-pT)?"var-good":"var-bad"}">${sinal(rT-pT)}${R(rT-pT)}</td><td class="n">${pT?pct((rT-pT)/pT):"—"}</td><td></td></tr>`);
+    linhas.push(`<tr class="grp"><td>${esc(gNome(d,g))}</td><td class="n">${R(pT)}</td><td class="n">${R(rT)}</td><td class="n ${bom(rT-pT)?"var-good":"var-bad"}">${sinal(rT-pT)}${R(rT-pT)}</td><td class="n">${pT?pct((rT-pT)/pT):"—"}</td><td></td></tr>`);
     for(const c of cs){const p=num(c.prev[k]),r=c.real[k],v=num(r)-p,dv=p?v/p:0;
       const st=r==null?`<span class="chip plain">sem lançamento</span>`:Math.abs(dv)<=0.05?`<span class="chip good">no previsto</span>`:bom(v)?`<span class="chip good">${G[g].sinal>0?"acima":"abaixo"}</span>`:`<span class="chip bad">${G[g].sinal>0?"abaixo":"acima"} ${pct(Math.abs(dv),0)}</span>`;
       linhas.push(`<tr><td style="padding-left:22px">${esc(c.nome)}</td><td class="n">${R(p)}</td><td class="n">${r==null?'<span class="muted">—</span>':R(r)}</td><td class="n ${r==null?"":bom(v)?"var-good":"var-bad"}">${r==null?"":sinal(v)+R(v)}</td><td class="n">${r==null||!p?"":pct(dv)}</td><td>${st}</td></tr>`);}
@@ -1015,8 +1117,8 @@ function linhasFluxo(P){
   return[
     ["Saldo inicial",P.saldo.map((v,k)=>v-P.liquido[k]),"grp"],
     ["(+) Recebimentos de vendas",P.cash.receita],["(+) Receitas financeiras",P.cash.fin_rec],
-    ["(−) Impostos sobre vendas e deduções",neg(P.cash.deducao)],["(−) Custos variáveis",neg(P.cash.custo)],["(−) Pessoal",neg(P.cash.pessoal)],
-    ["(−) Administrativas e ocupação",neg(P.cash.operacional)],["(−) Comerciais e marketing",neg(P.cash.comercial)],["(−) Despesas financeiras",neg(P.cash.fin_desp)],["(−) IRPJ e CSLL",neg(P.cash.tributos)],
+    ["(−) "+gNome(S.dados,"deducao"),neg(P.cash.deducao)],["(−) "+gNome(S.dados,"custo"),neg(P.cash.custo)],["(−) "+gNome(S.dados,"pessoal"),neg(P.cash.pessoal)],
+    ["(−) "+gNome(S.dados,"operacional"),neg(P.cash.operacional)],["(−) "+gNome(S.dados,"comercial"),neg(P.cash.comercial)],["(−) Despesas financeiras",neg(P.cash.fin_desp)],["(−) IRPJ e CSLL",neg(P.cash.tributos)],
     ["= Fluxo das operações",P.fcOp,"sub"],
     ["(−) Investimentos (CAPEX)",neg(P.cash.investimento)],["= Fluxo de investimentos",P.fcInv,"sub"],
     ["(+) Captação de empréstimos",P.captacoes],["(+) Aportes de sócios",P.cash.aporte],["(−) Parcelas de dívidas (juros + amortização)",neg(P.parcelas)],["(−) Distribuição de lucros e retiradas",neg(P.cash.retirada)],
@@ -1336,7 +1438,7 @@ const VIEWS={painel:telaPainel,plan:telaPlan,fluxo:telaFluxo,titulos:telaTitulos
 /* ============================ eventos ============================ */
 function rerender(){setTimeout(()=>{const ae=document.activeElement,id=ae&&ae.id,pos=ae&&ae.selectionStart;render();if(id){const el=document.getElementById(id);if(el){el.focus({preventScroll:true});if(el.tagName==="INPUT"&&/^(text|search|email|)$/.test(el.type)&&el.inputMode==="decimal")try{el.select()}catch(e){}else if(pos!=null)try{el.setSelectionRange(pos,pos)}catch(e){}}}},0);}
 function setPath(o,p,v){const k=p.split(".");for(let i=0;i<k.length-1;i++)o=o[k[i]];o[k[k.length-1]]=v;}
-function mudou(){U.compara=null;agendarSalvar();rerender();}
+function mudou(){if(S.dados)recalcula(S.dados);U.compara=null;agendarSalvar();rerender();}
 const val=id=>(document.getElementById(id)?.value??"").trim();
 const D=()=>S.dados;
 async function copiar(txt,msgId){const el=document.getElementById(msgId);try{await navigator.clipboard.writeText(txt);if(el)el.textContent="Copiado: cole no Excel ou Google Planilhas.";}catch(e){if(el)el.textContent="Não foi possível copiar neste navegador.";}}
@@ -1349,11 +1451,27 @@ document.addEventListener("change",async e=>{
     if(t.id==="inicioPlan"){if(!t.value)return;d.inicio=t.value;const k=idxMes(d,d.mesRef);if(k<0||k>=H)d.mesRef=d.inicio;mudou();return;}
     if(t.id==="mvTipo"){const tr=t.value==="transferencia";document.getElementById("mvDestWrap").hidden=!tr;document.getElementById("mvCatWrap").hidden=tr;document.getElementById("mvContaLbl").textContent=tr?"Conta de origem":"Conta";return;}
     if(t.id==="fGrupo"){d.categorias[+t.dataset.i].grupo=t.value;mudou();return;}
+    if(t.id==="ncGrupo"){U.ncGrupo=t.value;return;}
+    if(t.id==="ncCalc"){U.ncCalc=t.value;document.querySelectorAll("[data-nc]").forEach(el=>el.hidden=el.dataset.nc!==t.value);return;}
+    if(t.id&&/^(nc|modeloSel)/.test(t.id))return;
+    if(t.dataset.gname){const v=t.value.trim();d.nomesGrupos=d.nomesGrupos||{};if(!v||v===G[t.dataset.gname].nome)delete d.nomesGrupos[t.dataset.gname];else d.nomesGrupos[t.dataset.gname]=v;mudou();return;}
+    if(t.dataset.cf){const c=d.categorias[+t.dataset.i],f=t.dataset.cf,v=t.value;
+      if(f==="nome")c.nome=v.trim()||"Sem nome";
+      else if(f==="sub")c.sub=v.trim();
+      else if(f==="grupo")c.grupo=v;
+      else if(f==="calc"){if(v==="qtd"&&c.calc!=="qtd"){c.qtd=c.qtd||zeros();c.preco=c.preco||0;}if(v==="pct"&&c.calc!=="pct"){c.pct=c.pct||0;c.base=c.base||"receita";}c.calc=v;}
+      else if(f==="pct")c.pct=num(v);
+      else if(f==="base")c.base=v;
+      else if(f==="preco")c.preco=num(v);
+      else if(f==="prazo")c.prazo=num(v);
+      else if(f==="qtdTodos"){if(v.trim()==="")return;c.qtd=zeros().map(()=>num(v));}
+      else if(f==="valorTodos"){if(v.trim()==="")return;c.prev=zeros().map(()=>num(v));}
+      mudou();return;}
     if(t.dataset.cat!==undefined){
       const c=d.categorias[+t.dataset.cat],f=t.dataset.f;
       if(f==="nome")c.nome=t.value.trim()||"Sem nome";
       else if(f==="prazo")c.prazo=num(t.value);
-      else{const m=+t.dataset.m;c[f][m]=f==="real"&&t.value.trim()===""?null:num(t.value);}
+      else{const m=+t.dataset.m;if(f==="qtd")c.qtd[m]=num(t.value);else c[f][m]=f==="real"&&t.value.trim()===""?null:num(t.value);}
       mudou();return;
     }
     if(t.dataset.nome!==undefined){S.nome=t.value.trim()||"Sem nome";mudou();return;}
@@ -1400,16 +1518,30 @@ document.addEventListener("click",async e=>{
 
     /* ---- planejamento ---- */
     case "planModo":U.planModo=b.dataset.v;U.fill=null;render();break;
-    case "addCat":{const c=novaCat(b.dataset.g,"Nova categoria");const pos=d.categorias.map(x=>x.grupo).lastIndexOf(b.dataset.g);d.categorias.splice(pos<0?d.categorias.length:pos+1,0,c);mudou();setTimeout(()=>{const el=document.getElementById("cn_"+c.id);el?.focus();el?.select();},30);break;}
+    case "addCat":{const c=novaCat(b.dataset.g,"Nova conta");const pos=d.categorias.map(x=>x.grupo).lastIndexOf(b.dataset.g);d.categorias.splice(pos<0?d.categorias.length:pos+1,0,c);mudou();setTimeout(()=>{const el=document.getElementById("cn_"+c.id)||document.getElementById("pn_"+c.id);el?.focus();el?.select();},30);break;}
     case "fill":U.fill=id||null;render();break;
     case "fillAplica":{const c=d.categorias[+b.dataset.i],base=num(val("fBase")),g=num(val("fCresc"))/100,de=+val("fDe"),saz=document.getElementById("fSaz").checked,ms=mesesDo(d);
-      for(let k=de;k<H;k++){let v=base*Math.pow(1+g,k-de);if(saz)v*=1+num(d.sazonal[+ms[k].split("-")[1]-1])/100;c.prev[k]=Math.round(v*100)/100;}U.fill=null;mudou();break;}
+      for(let k=de;k<H;k++){let v=base*Math.pow(1+g,k-de);if(saz)v*=1+num(d.sazonal[+ms[k].split("-")[1]-1])/100;if(c.calc==="qtd")c.qtd[k]=Math.round(v*100)/100;else c.prev[k]=Math.round(v*100)/100;}U.fill=null;mudou();break;}
     case "fillReal":{const c=d.categorias[+b.dataset.i],kk=idxMes(d,d.mesRef);for(let k=0;k<=Math.min(kk,H-1);k++)if(c.real[k]==null)c.real[k]=c.prev[k];U.fill=null;mudou();break;}
-    case "fillZera":{const c=d.categorias[+b.dataset.i];c[U.planModo==="real"?"real":"prev"]=U.planModo==="real"?Array(H).fill(null):zeros();U.fill=null;mudou();break;}
+    case "fillZera":{const c=d.categorias[+b.dataset.i];if(U.planModo==="real")c.real=Array(H).fill(null);else{c.prev=zeros();c.qtd=zeros();}U.fill=null;mudou();break;}
     case "delCat":d.categorias.splice(+b.dataset.i,1);U.fill=null;mudou();break;
-    case "rolar":{for(const c of d.categorias){c.prev=[...c.prev.slice(1),c.prev[H-1]];c.real=[...c.real.slice(1),null];}d.inicio=addMes(d.inicio,1);if(idxMes(d,d.mesRef)<0)d.mesRef=d.inicio;mudou();aviso(`Horizonte agora começa em ${rotMes(d.inicio)}`,true);break;}
+    case "delCat2":if(b.dataset.ok!=="1"){b.dataset.ok="1";b.textContent="Excluir?";b.style.color="var(--bad)";b.style.fontSize=".74rem";break;}{const rem=d.categorias[+b.dataset.i];d.categorias.splice(+b.dataset.i,1);for(const c of d.categorias)if(c.base===rem.id)c.base="receita";}mudou();break;
+    case "dupCat":{const c=JSON.parse(JSON.stringify(d.categorias[+b.dataset.i]));c.id=uid();c.nome+=" (cópia)";c.real=Array(H).fill(null);d.categorias.splice(+b.dataset.i+1,0,c);mudou();break;}
+    case "mover":{const i=+b.dataset.i,dir=+b.dataset.dir,c=d.categorias[i];let j=i+dir;while(j>=0&&j<d.categorias.length&&d.categorias[j].grupo!==c.grupo)j+=dir;if(j<0||j>=d.categorias.length)break;[d.categorias[i],d.categorias[j]]=[d.categorias[j],d.categorias[i]];mudou();break;}
+    case "gReset":delete d.nomesGrupos[b.dataset.g];mudou();break;
+    case "aplicaModelo":{const n=aplicaModelo(d,val("modeloSel"));mudou();setTimeout(()=>{const el=document.getElementById("modMsg");if(el)el.textContent=n?`${n} conta(s) adicionada(s).`:"Todas as contas do modelo já existem.";},20);break;}
+    case "novaConta2":U.ncAberto=true;render();setTimeout(()=>{document.getElementById("formNC")?.scrollIntoView({block:"nearest"});document.getElementById("ncNome")?.focus();},0);break;
+    case "ncFecha":U.ncAberto=false;render();break;
+    case "ncSalva":{const err=document.getElementById("ncErr"),nome=val("ncNome");if(!nome){err.textContent="Informe o nome da conta.";break;}
+      const calc=val("ncCalc"),c=novaCat(val("ncGrupo"),nome,num(val("ncPrazo")),{calc,sub:val("ncSub")});
+      if(calc==="valor")c.prev=zeros().map(()=>num(val("ncValor")));
+      if(calc==="pct"){c.pct=num(val("ncPct"));c.base=val("ncBase")||"receita";}
+      if(calc==="qtd"){c.preco=num(val("ncPreco"));c.qtd=zeros().map(()=>num(val("ncQtd")));}
+      const pos=d.categorias.map(x=>x.grupo).lastIndexOf(c.grupo);d.categorias.splice(pos<0?d.categorias.length:pos+1,0,c);
+      U.ncGrupo=c.grupo;U.ncCalc=calc;mudou();aviso(`Conta “${nome}” adicionada`,true);setTimeout(()=>{const el=document.getElementById("ncNome");if(el){el.value="";el.focus();}},20);break;}
+    case "rolar":{for(const c of d.categorias){c.prev=[...c.prev.slice(1),c.prev[H-1]];c.real=[...c.real.slice(1),null];c.qtd=[...(c.qtd||zeros()).slice(1),(c.qtd||zeros())[H-1]];}d.inicio=addMes(d.inicio,1);if(idxMes(d,d.mesRef)<0)d.mesRef=d.inicio;mudou();aviso(`Horizonte agora começa em ${rotMes(d.inicio)}`,true);break;}
     case "copiarDRE":{const ms=mesesDo(d),campo=U.planModo==="real"?"real":"prev";const linhas=[["Grupo","Categoria",...ms.map(rotMes),"Total"]];
-      for(const g of GRUPOS)for(const c of d.categorias.filter(x=>x.grupo===g.k))linhas.push([g.nome,c.nome,...c[campo].map(v=>csvNum(num(v))),csvNum(sum(c[campo].map(num)))]);
+      for(const g of GRUPOS)for(const c of d.categorias.filter(x=>x.grupo===g.k))linhas.push([gNome(d,g.k),c.nome,...c[campo].map(v=>csvNum(num(v))),csvNum(sum(c[campo].map(num)))]);
       await copiar(linhas.map(l=>l.join("\t")).join("\n"),"copMsg");break;}
 
     /* ---- fluxo ---- */
